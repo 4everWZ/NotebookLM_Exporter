@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "NotebookLM Export",
+  "version": "1.0.0",
+  "description": "Export NotebookLM conversations to structured Markdown.",
+  "permissions": ["activeTab"],
+  "action": {
+    "default_popup": "src/extension/popup.html",
+    "default_title": "Export NotebookLM conversation"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://notebooklm.google.com/*"],
+      "js": ["src/extension/core.js", "src/extension/content-script.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "host_permissions": ["https://notebooklm.google.com/*"]
+}
