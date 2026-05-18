@@ -11,8 +11,30 @@
       <header>
         <h1>NotebookLM Export</h1>
       </header>
+
+      <section class="metrics" aria-label="Conversation status">
+        <span id="message-count">Messages: -</span>
+        <span id="source-count">Sources: -</span>
+      </section>
+
+      <p id="history-status" class="history-status">DOM: unknown</p>
+
+      <fieldset class="mode-group">
+        <legend>Export</legend>
+        <label>
+          <input id="mode-all" name="export-mode" type="radio" value="all" checked />
+          All
+        </label>
+        <label>
+          <input id="mode-selected" name="export-mode" type="radio" value="selected" />
+          Checked
+        </label>
+      </fieldset>
+
+      <div id="message-list" class="message-list" aria-label="Detected messages"></div>
+
       <button id="export-markdown" type="button">Export Markdown</button>
-      <p id="status" role="status">Open a NotebookLM notebook tab, then export.</p>
+      <p id="status" role="status">Checking active tab...</p>
     </main>
     <script src="popup.js"></script>
   </body>

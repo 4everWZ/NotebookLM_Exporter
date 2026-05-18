@@ -10,8 +10,10 @@ test("renders deterministic structured Markdown with frontmatter, turns, sources
       url: "https://notebooklm.google.com/notebook/example",
       exportedAt: "2026-05-17T10:00:00.000Z",
       historyLoadStatus: "complete",
+      exportMode: "all",
       messageCount: 2,
       sourceCount: 1,
+      selectedMessageCount: 2,
     },
     messages: [
       {
@@ -52,7 +54,9 @@ test("renders deterministic structured Markdown with frontmatter, turns, sources
   assert.match(first, /title: "MC3WD: Export Test"/);
   assert.match(first, /source_url: "https:\/\/notebooklm\.google\.com\/notebook\/example"/);
   assert.match(first, /history_load_status: "complete"/);
+  assert.match(first, /export_mode: "all"/);
   assert.match(first, /message_count: 2/);
+  assert.match(first, /selected_message_count: 2/);
   assert.match(first, /# MC3WD: Export Test/);
   assert.match(first, /## Conversation/);
   assert.match(first, /### User\n\nSummarize the method\./);
@@ -81,4 +85,31 @@ test("escapes YAML-sensitive frontmatter values", () => {
 
   assert.match(markdown, /title: "Notebook \\"quoted\\": test"/);
   assert.doesNotMatch(markdown, /## Export Warnings/);
+});
+
+test("does not collapse internal blank lines inside message bodies", () => {
+  const markdown = renderMarkdown({
+    metadata: {
+      title: "Blank Line Test",
+      url: "https://notebooklm.google.com/notebook/example",
+      exportedAt: "2026-05-18T10:00:00.000Z",
+      historyLoadStatus: "complete",
+      exportMode: "all",
+      messageCount: 1,
+      sourceCount: 0,
+      selectedMessageCount: 1,
+    },
+    messages: [
+      {
+        id: "m1",
+        role: "assistant",
+        markdown: "```text\nalpha\n\n\nbeta\n```",
+        citations: [],
+      },
+    ],
+    sources: [],
+    warnings: [],
+  });
+
+  assert.match(markdown, /```text\nalpha\n\n\nbeta\n```/);
 });

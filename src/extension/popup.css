@@ -5,14 +5,14 @@
 
 body {
   margin: 0;
-  min-width: 280px;
+  min-width: 360px;
   background: #f8fafc;
   color: #111827;
 }
 
 .popup-shell {
   display: grid;
-  gap: 12px;
+  gap: 10px;
   padding: 14px;
 }
 
@@ -20,6 +20,80 @@ h1 {
   margin: 0;
   font-size: 16px;
   font-weight: 650;
+}
+
+.metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  font-size: 13px;
+  color: #334155;
+}
+
+.history-status {
+  margin: 0;
+  color: #475569;
+  font-size: 13px;
+}
+
+.mode-group {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin: 0;
+  padding: 8px 0 0;
+  border: 0;
+  border-top: 1px solid #e2e8f0;
+}
+
+.mode-group legend {
+  padding: 0 0 6px;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.mode-group label {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 13px;
+}
+
+.message-list {
+  display: grid;
+  gap: 6px;
+  max-height: 220px;
+  overflow: auto;
+  padding: 8px 0;
+  border-top: 1px solid #e2e8f0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.message-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px;
+  align-items: start;
+  min-height: 32px;
+  color: #334155;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.message-row input {
+  margin-top: 2px;
+}
+
+.message-role {
+  color: #0f766e;
+  font-weight: 650;
+}
+
+.empty-message-list {
+  margin: 0;
+  color: #64748b;
+  font-size: 12px;
 }
 
 button {

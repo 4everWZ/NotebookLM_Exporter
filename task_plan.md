@@ -4,7 +4,7 @@
 先完成可评审的功能与技术 spec，对齐后再进入实现；第一阶段实现 NotebookLM conversation 到 Markdown 的导出，PDF 与公式复制/LaTeX 解析作为后续扩展设计。
 
 ## 当前阶段
-阶段 6
+阶段 6 complete
 
 ## 各阶段
 
@@ -41,13 +41,15 @@
 - [x] 完成 1.0 审计并记录当前环境边界
 - **状态：** complete
 
-### 阶段 6：1.1 结构化内容与选择导出设计
+### 阶段 6：1.1 结构化内容与选择导出实现
 - [x] 梳理 1.0 中消息内部换行和富文本结构丢失的原因
 - [x] 写入 1.1 spec，覆盖结构化 Markdown、popup 状态、计数、全部/勾选导出
 - [x] 写入 1.1 spec-to-implementation matrix
 - [x] 写入 1.1 TDD 实施计划
-- [ ] 等待用户审阅并确认是否按该 spec 进入实现
-- **状态：** in_progress
+- [x] 按 TDD 实现结构化 Markdown 抽取、scan 状态和全部/勾选导出
+- [x] 同步 README、matrix、status 和进度文档
+- [x] 完成本地测试、build 和保存 HTML smoke 验证
+- **状态：** complete
 
 ## 关键问题
 1. 第一版产品形态是浏览器扩展、用户脚本/书签脚本、还是 CLI/本地网页解析器？已确认：浏览器扩展。

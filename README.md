@@ -2,12 +2,14 @@
 
 Browser extension for exporting NotebookLM conversations to structured Markdown.
 
-## 1.0 Scope
+## 1.1 Scope
 
 - Manifest V3 browser extension.
 - Exports the current NotebookLM conversation to `.md`.
 - Automatically attempts to load lazy conversation history before export.
-- Preserves structured turns, sources, citations, lists, code blocks, tables, and basic formulas.
+- Shows detected message count, source count, and DOM/history completeness in the popup.
+- Supports all-message export by default and checked-message export when selected.
+- Preserves structured turns, internal message line breaks, sources, citations, paragraphs, headings, lists, code blocks, tables, links, emphasis, inline code, and basic formulas.
 - Uses LaTeX annotations when available and records warnings when formula markup is unsupported.
 
 PDF export and full Gemini/Voyager formula-copy compatibility are future work.
@@ -21,7 +23,9 @@ PDF export and full Gemini/Voyager formula-copy compatibility are future work.
 5. Select this project directory.
 6. Open a NotebookLM notebook page.
 7. Click the NotebookLM Export extension action.
-8. Click Export Markdown.
+8. Wait for the popup to scan the conversation and show `DOM: complete`.
+9. Keep `All` selected or switch to `Checked` and choose messages.
+10. Click Export Markdown.
 
 ## Verify Locally
 

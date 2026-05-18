@@ -51,7 +51,7 @@
 - Chrome/Edge headless extension-load：失败于 GPU process；Chrome no-extension baseline 同样失败，说明该 CLI 路径在当前环境不可用。
 
 ## 下一步
-- 等待 1.1 spec 审阅确认后，按 `docs/plans/2026-05-18-structured-content-selection-export.md` 进入 TDD 实现。
+- 在用户本机 authenticated NotebookLM 页面中加载 unpacked extension，做一次 live popup/export 手动验证。
 
 ## 2026-05-18
 - 用户反馈 1.0 导出会丢失对话内部换行和结构化内容，需要按 Markdown/富文本结构组织并保留内部换行。
@@ -64,4 +64,14 @@
 - 已写入 1.1 spec：`docs/specs/01_structured_content_and_selection_export.md`。
 - 已写入 1.1 matrix：`docs/matrix_notebooklm_export_1_1.md`。
 - 已写入 1.1 TDD 实施计划：`docs/plans/2026-05-18-structured-content-selection-export.md`。
-- 当前门禁：按 brainstorming 流程，先请用户审阅 spec；确认后再进入实现代码变更。
+- 已按 TDD 增加 DOM adapter 测试，先看到换行、富文本、嵌套列表测试失败，再实现 block-aware Markdown traversal。
+- 已按 TDD 增加 selection/status/renderer 测试，先看到 `filterExportData`、`createConversationStatus`、`createMessagePreview` 和 frontmatter 新字段缺失，再实现对应 helper。
+- 已补充 static verifier RED，先看到 popup ID 和 scan message type 缺失，再实现 content script scan/export 合约与 popup UI。
+- 已将 `manifest.json` 和 `package.json` 版本同步到 `1.1.0`。
+- 已新增 1.1 status doc：`docs/specs/status_notebooklm_export_1_1.md`。
+- 已更新 README，记录 1.1 popup scan、DOM complete 状态和 all/checked 导出流程。
+- `npm test`：21/21 tests passed。
+- `npm run build`：Extension verification passed。
+- 保存 HTML smoke：`messageCount=28`、`sourceCount=28`、`warningCount=271`、`hasExportMode=true`、`hasSelectedCount=true`、首个保留内部换行的消息为 `m2`。
+- popup smoke：stub `chrome.tabs` 后确认 scan 显示 `Messages: 2`、`Sources: 1`、`DOM: complete`；默认 `All`；切到 `Checked` 未勾选时禁用导出；勾选 `m2` 后导出 payload 为 `{ mode: "selected", selectedMessageIds: ["m2"] }`。
+- 当前边界：live authenticated NotebookLM popup/export 没有自动化验证；仍需用户在有登录态的浏览器中手动加载扩展验证。

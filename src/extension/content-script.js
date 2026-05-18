@@ -1,5 +1,8 @@
 (function attachNotebookLmExporter() {
-  const MESSAGE_TYPE = "NOTEBOOKLM_EXPORT_MARKDOWN";
+  const MESSAGE_TYPES = {
+    scan: "NOTEBOOKLM_SCAN_CONVERSATION",
+    exportMarkdown: "NOTEBOOKLM_EXPORT_MARKDOWN",
+  };
   const STATUS_ID = "notebooklm-export-status";
 
   function getCore() {
@@ -70,13 +73,29 @@
     setTimeout(() => URL.revokeObjectURL(url), 60000);
   }
 
-  async function exportMarkdown() {
-    if (!location.hostname.endsWith("notebooklm.google.com")) {
-      throw new Error("Open a NotebookLM notebook page before exporting.");
+  function isNotebookLmPage() {
+    return location.hostname.endsWith("notebooklm.google.com");
+  }
+
+  async function loadAndExtractConversation(statusPrefix) {
+    if (!isNotebookLmPage()) {
+      return {
+        status: {
+          ok: false,
+          status: "not_notebooklm",
+          messageCount: 0,
+          sourceCount: 0,
+          warningCount: 0,
+          messages: [],
+          error: "Open a NotebookLM notebook page before exporting.",
+        },
+        history: { status: "not_notebooklm", messageCount: 0 },
+        data: null,
+      };
     }
 
     const core = getCore();
-    showStatus("NotebookLM Export: loading full conversation history...");
+    showStatus(`${statusPrefix}: loading full conversation history...`);
 
     const history = await core.loadFullHistory(document, {
       waitMs: 650,
@@ -84,49 +103,97 @@
       maxAttempts: 100,
     });
 
-    if (history.status !== "complete") {
-      throw new Error(`Could not confirm complete conversation history (${history.status}).`);
-    }
-
-    showStatus("NotebookLM Export: extracting conversation...");
+    showStatus(`${statusPrefix}: extracting conversation...`);
     const exportedAt = new Date().toISOString();
     const data = core.extractNotebookData(document, {
       exportedAt,
       historyLoadStatus: history.status,
       url: location.href,
     });
+    const status = core.createConversationStatus(data, history);
 
-    if (!data.messages.length) {
-      throw new Error("No NotebookLM conversation messages were found.");
+    return {
+      status,
+      history,
+      data,
+    };
+  }
+
+  async function scanConversation() {
+    const result = await loadAndExtractConversation("NotebookLM Export scan");
+
+    if (result && result.status) {
+      showStatus(
+        result.status.ok
+          ? `NotebookLM Export: history complete. Messages: ${result.status.messageCount}.`
+          : `NotebookLM Export: ${result.status.error}`,
+        result.status.ok ? "success" : "error",
+      );
+
+      if (result.status.ok) {
+        hideStatusSoon();
+      }
+
+      return result.status;
+    }
+
+    return result;
+  }
+
+  async function exportMarkdown(options) {
+    if (!location.hostname.endsWith("notebooklm.google.com")) {
+      throw new Error("Open a NotebookLM notebook page before exporting.");
+    }
+
+    const core = getCore();
+    const result = await loadAndExtractConversation("NotebookLM Export");
+
+    if (!result.status.ok) {
+      throw new Error(result.status.error);
     }
 
     showStatus("NotebookLM Export: rendering Markdown...");
-    const markdown = core.renderMarkdown(data);
+    const filteredData = core.filterExportData(result.data, options || { mode: "all", selectedMessageIds: [] });
+    const markdown = core.renderMarkdown(filteredData);
 
     showStatus("NotebookLM Export: downloading Markdown...");
-    downloadMarkdown(markdown, createFileName(data.metadata.title));
+    downloadMarkdown(markdown, createFileName(filteredData.metadata.title));
 
     showStatus("NotebookLM Export: Markdown downloaded.", "success");
     hideStatusSoon();
 
     return {
       ok: true,
-      messageCount: data.messages.length,
-      warningCount: data.warnings.length,
+      messageCount: filteredData.messages.length,
+      sourceCount: filteredData.sources.length,
+      warningCount: filteredData.warnings.length,
+      historyStatus: result.history.status,
+      exportMode: filteredData.metadata.exportMode,
     };
   }
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-    if (!message || message.type !== MESSAGE_TYPE) {
+    if (!message || !Object.values(MESSAGE_TYPES).includes(message.type)) {
       return undefined;
     }
 
-    exportMarkdown()
-      .then((result) => sendResponse(result))
-      .catch((error) => {
-        showStatus(`NotebookLM Export: ${error.message}`, "error");
-        sendResponse({ ok: false, error: error.message });
-      });
+    if (message.type === MESSAGE_TYPES.scan) {
+      scanConversation()
+        .then((result) => sendResponse(result))
+        .catch((error) => {
+          showStatus(`NotebookLM Export: ${error.message}`, "error");
+          sendResponse({ ok: false, status: "error", error: error.message });
+        });
+    }
+
+    if (message.type === MESSAGE_TYPES.exportMarkdown) {
+      exportMarkdown(message.options)
+        .then((result) => sendResponse(result))
+        .catch((error) => {
+          showStatus(`NotebookLM Export: ${error.message}`, "error");
+          sendResponse({ ok: false, error: error.message });
+        });
+    }
 
     return true;
   });

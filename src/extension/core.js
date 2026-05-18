@@ -68,7 +68,9 @@
       `source_url: ${yamlString(metadata.url || "")}`,
       `exported_at: ${yamlString(metadata.exportedAt || "")}`,
       `history_load_status: ${yamlString(metadata.historyLoadStatus || "unknown")}`,
+      `export_mode: ${yamlString(metadata.exportMode || "all")}`,
       `message_count: ${numberValue(metadata.messageCount)}`,
+      `selected_message_count: ${numberValue(metadata.selectedMessageCount ?? metadata.messageCount)}`,
       `source_count: ${numberValue(metadata.sourceCount)}`,
       "---",
       "",
@@ -83,7 +85,7 @@
       renderWarnings(data.warnings),
     ];
 
-    return `${sections.filter((section) => section !== "").join("\n").replace(/\n{3,}/g, "\n\n").trimEnd()}\n`;
+    return `${sections.filter((section) => section !== "").join("\n").trimEnd()}\n`;
   }
 
   function hasClass(element, className) {
@@ -170,13 +172,33 @@
     return String((node && node.textContent) || "").replace(/\s+/g, " ").trim();
   }
 
+  function trimOuterBlankLines(text) {
+    return String(text || "").replace(/^\n+|\n+$/g, "");
+  }
+
   function normalizeInline(text) {
-    return String(text || "").replace(/\s+/g, " ").trim();
+    return String(text || "")
+      .replace(/\r\n?/g, "\n")
+      .replace(/[ \t\f\v]+/g, " ")
+      .replace(/ *\n */g, "\n")
+      .trim();
   }
 
   function getTagName(element) {
     return String((element && element.tagName) || "").toLowerCase();
   }
+
+  const BLOCK_TAGS = new Set([
+    "blockquote",
+    "div",
+    "mat-card-content",
+    "ol",
+    "p",
+    "pre",
+    "section",
+    "table",
+    "ul",
+  ]);
 
   function isElement(node) {
     return Boolean(node && node.nodeType === 1);
@@ -192,6 +214,19 @@
         typeof element.matches === "function" &&
         selectors.some((selector) => element.matches(selector)),
     );
+  }
+
+  function isHeadingTag(tagName) {
+    return /^h[1-6]$/.test(tagName);
+  }
+
+  function isBlockElement(element) {
+    const tagName = getTagName(element);
+    return BLOCK_TAGS.has(tagName) || isHeadingTag(tagName);
+  }
+
+  function hasBlockChildren(element) {
+    return Array.from((element && element.children) || []).some((child) => isBlockElement(child));
   }
 
   function getTitle(documentRef) {
@@ -255,12 +290,31 @@
     return [header, separator, ...body].join("\n");
   }
 
-  function renderList(element, context) {
+  function renderList(element, context, depth = 0) {
     return Array.from(element.children || [])
       .filter((child) => getTagName(child) === "li")
       .map((child, index) => {
         const marker = getTagName(element) === "ol" ? `${index + 1}.` : "-";
-        return `${marker} ${normalizeInline(renderInlineChildren(child, context))}`;
+        const directParts = [];
+        const nestedLists = [];
+
+        for (const itemChild of Array.from(child.childNodes || [])) {
+          if (isElement(itemChild) && ["ul", "ol"].includes(getTagName(itemChild))) {
+            const nested = renderList(itemChild, context, depth + 1);
+            if (nested) {
+              nestedLists.push(nested);
+            }
+          } else if (isElement(itemChild) && (isBlockElement(itemChild) || hasBlockChildren(itemChild))) {
+            directParts.push(renderBlockElement(itemChild, context));
+          } else {
+            directParts.push(nodeToMarkdown(itemChild, context));
+          }
+        }
+
+        const prefix = "  ".repeat(depth);
+        const itemText = normalizeInline(directParts.join(""));
+        const currentLine = `${prefix}${marker}${itemText ? ` ${itemText}` : ""}`;
+        return [currentLine, ...nestedLists].filter(Boolean).join("\n");
       })
       .join("\n");
   }
@@ -307,11 +361,33 @@
     }
 
     if (tagName === "pre") {
-      return `\`\`\`text\n${String(node.textContent || "").trim()}\n\`\`\``;
+      return `\`\`\`text\n${trimOuterBlankLines(node.textContent)}\n\`\`\``;
     }
 
     if (tagName === "code") {
       return `\`${String(node.textContent || "").trim()}\``;
+    }
+
+    if (isHeadingTag(tagName)) {
+      const level = Number(tagName.slice(1));
+      const text = normalizeInline(renderInlineChildren(node, context));
+      return text ? `${"#".repeat(level)} ${text}` : "";
+    }
+
+    if (tagName === "strong" || tagName === "b") {
+      const text = normalizeInline(renderInlineChildren(node, context));
+      return text ? `**${text}**` : "";
+    }
+
+    if (tagName === "em" || tagName === "i") {
+      const text = normalizeInline(renderInlineChildren(node, context));
+      return text ? `*${text}*` : "";
+    }
+
+    if (tagName === "a") {
+      const text = normalizeInline(renderInlineChildren(node, context));
+      const href = node.getAttribute && node.getAttribute("href");
+      return text && href ? `[${text}](${href})` : text;
     }
 
     if (tagName === "ul" || tagName === "ol") {
@@ -325,36 +401,62 @@
     return renderInlineChildren(node, context);
   }
 
+  function renderBlockElement(element, context) {
+    const tagName = getTagName(element);
+
+    if (isHeadingTag(tagName) || ["ul", "ol", "pre", "table"].includes(tagName)) {
+      return nodeToMarkdown(element, context).trim();
+    }
+
+    if (tagName === "p") {
+      return normalizeInline(renderInlineChildren(element, context));
+    }
+
+    if (tagName === "blockquote") {
+      const markdown = elementToMarkdown(element, context);
+      return markdown
+        .split("\n")
+        .map((line) => (line ? `> ${line}` : ">"))
+        .join("\n");
+    }
+
+    if (hasBlockChildren(element)) {
+      return elementToMarkdown(element, context);
+    }
+
+    return normalizeInline(renderInlineChildren(element, context));
+  }
+
   function elementToMarkdown(element, context) {
     const blockParts = [];
+    let inlineBuffer = "";
+
+    function flushInlineBuffer() {
+      const text = normalizeInline(inlineBuffer);
+      if (text) {
+        blockParts.push(text);
+      }
+      inlineBuffer = "";
+    }
 
     for (const child of Array.from(element.childNodes || [])) {
       if (isText(child)) {
-        const text = normalizeInline(child.textContent);
-        if (text) {
-          blockParts.push(text);
-        }
+        inlineBuffer += child.textContent || "";
         continue;
       }
 
-      const tagName = getTagName(child);
-      if (["p", "div", "section", "mat-card-content"].includes(tagName)) {
-        const text = normalizeInline(renderInlineChildren(child, context));
-        if (text) {
-          blockParts.push(text);
-        }
-      } else if (["ul", "ol", "pre", "table"].includes(tagName)) {
-        const markdown = nodeToMarkdown(child, context).trim();
+      if (isElement(child) && (isBlockElement(child) || hasBlockChildren(child))) {
+        flushInlineBuffer();
+        const markdown = renderBlockElement(child, context).trim();
         if (markdown) {
           blockParts.push(markdown);
         }
       } else {
-        const markdown = normalizeInline(nodeToMarkdown(child, context));
-        if (markdown) {
-          blockParts.push(markdown);
-        }
+        inlineBuffer += nodeToMarkdown(child, context);
       }
     }
+
+    flushInlineBuffer();
 
     if (blockParts.length === 0) {
       return visibleText(element);
@@ -418,6 +520,91 @@
       messages,
       warnings,
     };
+  }
+
+  function createMessagePreview(markdown) {
+    return String(markdown || "")
+      .replace(/```[\s\S]*?```/g, " code ")
+      .replace(/[#>*_`[\]()|]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 140);
+  }
+
+  function normalizeExportOptions(options = {}) {
+    return {
+      mode: options.mode === "selected" ? "selected" : "all",
+      selectedMessageIds: Array.isArray(options.selectedMessageIds) ? options.selectedMessageIds : [],
+    };
+  }
+
+  function filterExportData(exportData, options = {}) {
+    const data = exportData || {};
+    const normalizedOptions = normalizeExportOptions(options);
+    const messages = Array.isArray(data.messages) ? data.messages : [];
+    const sources = Array.isArray(data.sources) ? data.sources : [];
+    const warnings = Array.isArray(data.warnings) ? data.warnings : [];
+    let selectedMessages = messages;
+
+    if (normalizedOptions.mode === "selected") {
+      const selectedIds = new Set(normalizedOptions.selectedMessageIds.filter(Boolean));
+
+      if (selectedIds.size === 0) {
+        throw new Error("Selected export requires at least one checked message.");
+      }
+
+      selectedMessages = messages.filter((message) => selectedIds.has(message.id));
+
+      if (selectedMessages.length !== selectedIds.size) {
+        throw new Error("Selected messages were not found in the current conversation.");
+      }
+    }
+
+    return {
+      ...data,
+      metadata: {
+        ...(data.metadata || {}),
+        exportMode: normalizedOptions.mode,
+        messageCount: selectedMessages.length,
+        selectedMessageCount: selectedMessages.length,
+        sourceCount: sources.length,
+      },
+      sources: [...sources],
+      messages: [...selectedMessages],
+      warnings: [...warnings],
+    };
+  }
+
+  function createConversationStatus(exportData, history = {}) {
+    const data = exportData || {};
+    const messages = Array.isArray(data.messages) ? data.messages : [];
+    const sources = Array.isArray(data.sources) ? data.sources : [];
+    const warnings = Array.isArray(data.warnings) ? data.warnings : [];
+    const historyStatus = history.status || (data.metadata && data.metadata.historyLoadStatus) || "unknown";
+    const status = historyStatus === "complete" && messages.length === 0 ? "no_messages" : historyStatus;
+    const ok = status === "complete";
+    const response = {
+      ok,
+      status,
+      messageCount: messages.length,
+      historyMessageCount: numberValue(history.messageCount ?? messages.length),
+      sourceCount: sources.length,
+      warningCount: warnings.length,
+      messages: messages.map((message) => ({
+        id: message.id,
+        role: message.role,
+        preview: createMessagePreview(message.markdown),
+      })),
+    };
+
+    if (!ok) {
+      response.error =
+        status === "no_messages"
+          ? "No NotebookLM conversation messages were found."
+          : `Could not confirm complete conversation history (${status}).`;
+    }
+
+    return response;
   }
 
   function defaultWait(milliseconds) {
@@ -519,8 +706,11 @@
   }
 
   return {
+    createConversationStatus,
+    createMessagePreview,
     extractNotebookData,
     extractFormulaMarkdown,
+    filterExportData,
     loadFullHistory,
     renderMarkdown,
   };

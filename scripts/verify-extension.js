@@ -21,6 +21,10 @@ function exists(relativePath) {
   return fs.existsSync(path.join(root, relativePath));
 }
 
+function readText(relativePath) {
+  return fs.readFileSync(path.join(root, relativePath), "utf8");
+}
+
 const manifestPath = path.join(root, "manifest.json");
 
 if (!fs.existsSync(manifestPath)) {
@@ -66,6 +70,29 @@ for (const requiredFile of [
 ]) {
   if (!exists(requiredFile)) {
     fail(`${requiredFile} is missing`);
+  }
+}
+
+const popupHtml = readText("src/extension/popup.html");
+for (const requiredId of [
+  "status",
+  "message-count",
+  "source-count",
+  "history-status",
+  "mode-all",
+  "mode-selected",
+  "message-list",
+  "export-markdown",
+]) {
+  if (!popupHtml.includes(`id="${requiredId}"`)) {
+    fail(`popup.html must include #${requiredId}`);
+  }
+}
+
+const contentScript = readText("src/extension/content-script.js");
+for (const requiredMessageType of ["NOTEBOOKLM_SCAN_CONVERSATION", "NOTEBOOKLM_EXPORT_MARKDOWN"]) {
+  if (!contentScript.includes(requiredMessageType)) {
+    fail(`content-script.js must include ${requiredMessageType}`);
   }
 }
 

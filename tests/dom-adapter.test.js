@@ -65,3 +65,105 @@ test("extracts NotebookLM title, sources, ordered messages, citations, and rich 
   assert.match(data.messages[1].markdown, /\| Metric \| Value \|/);
   assert.deepEqual(data.messages[1].citations, [{ label: "1", sourceId: "s1" }]);
 });
+
+test("preserves message-internal line breaks and paragraph boundaries", () => {
+  const fixture = doc({
+    title: "Line Break Test - NotebookLM",
+    children: [
+      el("div", { class: "chat-panel-content" }, [
+        el("div", { class: "chat-message-pair" }, [
+          el("mat-card", { class: "from-user-message-card-content" }, [
+            el("mat-card-content", { class: "message-content from-user-message-inner-content" }, [
+              el("p", {}, ["First line", el("br", {}, []), "Second line"]),
+              el("p", {}, ["Second paragraph"]),
+            ]),
+          ]),
+        ]),
+      ]),
+    ],
+  });
+
+  const data = extractNotebookData(fixture, {
+    exportedAt: "2026-05-18T10:00:00.000Z",
+    historyLoadStatus: "complete",
+  });
+
+  assert.equal(data.messages[0].markdown, "First line\nSecond line\n\nSecond paragraph");
+});
+
+test("renders headings, inline rich text, links, and code blocks as Markdown", () => {
+  const fixture = doc({
+    title: "Rich Text Test - NotebookLM",
+    children: [
+      el("div", { class: "chat-panel-content" }, [
+        el("div", { class: "chat-message-pair" }, [
+          el("mat-card", { class: "to-user-message-card-content" }, [
+            el("mat-card-content", { class: "message-content to-user-message-inner-content" }, [
+              el("h3", {}, ["Main result"]),
+              el("p", {}, [
+                "Use ",
+                el("strong", {}, ["collision"]),
+                " and ",
+                el("em", {}, ["entropy"]),
+                " with ",
+                el("code", {}, ["score"]),
+                " from ",
+                el("a", { href: "https://example.com" }, ["paper"]),
+                ".",
+              ]),
+              el("pre", {}, ["alpha\nbeta\n"]),
+            ]),
+          ]),
+        ]),
+      ]),
+    ],
+  });
+
+  const data = extractNotebookData(fixture, {
+    exportedAt: "2026-05-18T10:00:00.000Z",
+    historyLoadStatus: "complete",
+  });
+
+  assert.equal(
+    data.messages[0].markdown,
+    [
+      "### Main result",
+      "",
+      "Use **collision** and *entropy* with `score` from [paper](https://example.com).",
+      "",
+      "```text",
+      "alpha",
+      "beta",
+      "```",
+    ].join("\n"),
+  );
+});
+
+test("keeps nested list indentation when exporting Markdown", () => {
+  const fixture = doc({
+    title: "Nested List Test - NotebookLM",
+    children: [
+      el("div", { class: "chat-panel-content" }, [
+        el("div", { class: "chat-message-pair" }, [
+          el("mat-card", { class: "to-user-message-card-content" }, [
+            el("mat-card-content", { class: "message-content to-user-message-inner-content" }, [
+              el("ul", {}, [
+                el("li", {}, [
+                  "Parent",
+                  el("ul", {}, [el("li", {}, ["Child"])]),
+                ]),
+              ]),
+            ]),
+          ]),
+        ]),
+      ]),
+    ],
+  });
+
+  const data = extractNotebookData(fixture, {
+    exportedAt: "2026-05-18T10:00:00.000Z",
+    historyLoadStatus: "complete",
+  });
+
+  assert.equal(data.messages[0].markdown, "- Parent\n  - Child");
+});
