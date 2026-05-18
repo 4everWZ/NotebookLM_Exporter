@@ -104,6 +104,34 @@ if (popupJs.includes("scanActiveTab();")) {
 if (!popupJs.includes('document.getElementById("scan-conversation")')) {
   fail("popup.js must bind #scan-conversation");
 }
+if (!popupJs.includes("message-preview")) {
+  fail("popup.js must render message previews with .message-preview for bounded popup layout");
+}
+
+const popupCss = readText("src/extension/popup.css");
+const bodyRule = popupCss.match(/body\s*\{[^}]*\}/);
+if (!bodyRule || !/(^|[;{\s])width:\s*360px\b/.test(bodyRule[0])) {
+  fail("popup.css body must set width: 360px so long previews cannot make the popup super wide");
+}
+if (!/grid-template-columns:\s*auto\s+minmax\(0,\s*1fr\)/.test(popupCss)) {
+  fail("popup.css .message-row must use minmax(0, 1fr) so long previews cannot widen the popup");
+}
+
+const previewRule = popupCss.match(/\.message-preview\s*\{[^}]*\}/);
+if (!previewRule) {
+  fail("popup.css must define .message-preview");
+} else {
+  for (const requiredDeclaration of [
+    /min-width:\s*0\b/,
+    /overflow:\s*hidden\b/,
+    /white-space:\s*nowrap\b/,
+    /text-overflow:\s*ellipsis\b/,
+  ]) {
+    if (!requiredDeclaration.test(previewRule[0])) {
+      fail(`popup.css .message-preview is missing ${requiredDeclaration}`);
+    }
+  }
+}
 
 if (process.exitCode) {
   process.exit();

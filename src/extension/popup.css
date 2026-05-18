@@ -5,7 +5,9 @@
 
 body {
   margin: 0;
+  width: 360px;
   min-width: 360px;
+  box-sizing: border-box;
   background: #f8fafc;
   color: #111827;
 }
@@ -72,9 +74,10 @@ h1 {
 
 .message-row {
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: auto minmax(0, 1fr);
   gap: 8px;
-  align-items: start;
+  align-items: center;
+  min-width: 0;
   min-height: 32px;
   color: #334155;
   font-size: 12px;
@@ -88,6 +91,14 @@ h1 {
 .message-role {
   color: #0f766e;
   font-weight: 650;
+}
+
+.message-preview {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .empty-message-list {

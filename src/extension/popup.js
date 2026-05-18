@@ -97,6 +97,7 @@ function renderMessages(messages) {
     checkbox.addEventListener("change", updateControls);
 
     const text = document.createElement("span");
+    text.className = "message-preview";
     const role = document.createElement("span");
     role.className = "message-role";
     role.textContent = `${roleLabel(message.role)}: `;
