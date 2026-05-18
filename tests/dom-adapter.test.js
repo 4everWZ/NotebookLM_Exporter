@@ -236,6 +236,90 @@ test("renders headings, inline rich text, links, and code blocks as Markdown", (
   );
 });
 
+test("separates adjacent source citation markers", () => {
+  const fixture = doc({
+    title: "Adjacent Citation Test - NotebookLM",
+    children: [
+      el("div", { class: "chat-panel-content" }, [
+        el("div", { class: "chat-message-pair" }, [
+          el("mat-card", { class: "to-user-message-card-content" }, [
+            el("mat-card-content", { class: "message-content to-user-message-inner-content" }, [
+              el("p", {}, [
+                "结构损伤及视觉簇内部的语义混淆",
+                el("span", { class: "citation-marker" }, ["4"]),
+                el("span", { class: "citation-marker" }, ["5"]),
+                "。",
+              ]),
+            ]),
+          ]),
+        ]),
+      ]),
+    ],
+  });
+
+  const data = extractNotebookData(fixture, {
+    exportedAt: "2026-05-18T10:00:00.000Z",
+    historyLoadStatus: "complete",
+  });
+
+  assert.equal(data.messages[0].markdown, "结构损伤及视觉簇内部的语义混淆[4] [5]。");
+  assert.deepEqual(data.messages[0].citations, [
+    { label: "4", sourceId: "s4" },
+    { label: "5", sourceId: "s5" },
+  ]);
+});
+
+test("separates adjacent emphasis spans without changing italic bold semantics", () => {
+  const fixture = doc({
+    title: "Adjacent Emphasis Test - NotebookLM",
+    children: [
+      el("div", { class: "chat-panel-content" }, [
+        el("div", { class: "chat-message-pair" }, [
+          el("mat-card", { class: "to-user-message-card-content" }, [
+            el("mat-card-content", { class: "message-content to-user-message-inner-content" }, [
+              el("p", {}, [
+                el("strong", {}, ["为什么在这里要使用"]),
+                el("strong", {}, ["min"]),
+                el("strong", {}, ["进行约束？"]),
+                " 这是一种策略。",
+              ]),
+              el("p", {}, [
+                el("em", {}, ["斜体"]),
+                " ",
+                el("strong", {}, ["加粗"]),
+                " ",
+                el("strong", {}, [el("em", {}, ["斜体加粗"])]),
+              ]),
+              el("ul", {}, [
+                el("li", {}, [
+                  el("strong", {}, ["列表加粗一"]),
+                  el("strong", {}, ["列表加粗二"]),
+                ]),
+              ]),
+            ]),
+          ]),
+        ]),
+      ]),
+    ],
+  });
+
+  const data = extractNotebookData(fixture, {
+    exportedAt: "2026-05-18T10:00:00.000Z",
+    historyLoadStatus: "complete",
+  });
+
+  assert.equal(
+    data.messages[0].markdown,
+    [
+      "**为什么在这里要使用** **min** **进行约束？** 这是一种策略。",
+      "",
+      "*斜体* **加粗** ***斜体加粗***",
+      "",
+      "- **列表加粗一** **列表加粗二**",
+    ].join("\n"),
+  );
+});
+
 test("keeps nested list indentation when exporting Markdown", () => {
   const fixture = doc({
     title: "Nested List Test - NotebookLM",

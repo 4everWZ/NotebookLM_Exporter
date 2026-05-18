@@ -268,6 +268,8 @@ The DOM adapter must stop using one global whitespace-collapse path for message 
 - `code` outside `pre` becomes inline code.
 - `a[href]` becomes `[text](href)` when both text and href are available; otherwise text is preserved.
 - Citation markers keep the existing bracket form, such as `[1]`.
+- Adjacent citation markers are separated with a single space, such as `[4] [5]`, so Markdown renderers do not treat two source references as one visual token.
+- Adjacent generated emphasis spans are separated with a single space when their Markdown delimiters would touch. Single-star italic, double-star bold, and triple-star bold-italic markup remain unchanged inside each span.
 - Inline formulas keep `$...$` when a formula source field, LaTeX annotation, or supported NotebookLM KaTeX visual DOM is available.
 - Unsupported inline rich nodes fall back to their recursively extracted text and add a warning only when content would otherwise be ambiguous or lost.
 
@@ -362,6 +364,8 @@ The popup does not parse NotebookLM DOM. It only consumes content-script scan re
   - code block internal newlines,
   - headings,
   - inline bold/italic/link/code,
+  - adjacent citation marker spacing,
+  - adjacent emphasis marker spacing without breaking italic/bold/bold-italic semantics,
   - list structure.
 - Formula parser preserves:
   - Gemini/Voyager-style `data-math` source,
@@ -426,6 +430,8 @@ Live authenticated NotebookLM export remains a manual verification path because 
 - Export blocks visibly when history completeness is not confirmed.
 - Message internal line breaks are preserved in Markdown source.
 - Paragraphs, lists, code blocks, tables, headings, and basic inline rich text are exported as Markdown blocks/inline markup rather than flattened text.
+- Adjacent source citations export as separate bracket tokens, for example `[4] [5]`.
+- Adjacent rich-text emphasis spans do not produce ambiguous `****` delimiter runs in the exported Markdown.
 - NotebookLM structural wrappers do not flatten headings and tables into adjacent paragraph text.
 - MC3WD-style saved-page KaTeX formulas export as Markdown LaTeX without `unsupported_formula` warnings for supported visual-DOM patterns.
 - Display formulas use standalone delimiter lines and inline formulas have surrounding prose spacing.

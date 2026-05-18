@@ -694,7 +694,27 @@
       .replace(/\r\n?/g, "\n")
       .replace(/[ \t\f\v]+/g, " ")
       .replace(/ *\n */g, "\n")
+      .replace(/(\[\d+\])(?=\[\d+\])/g, "$1 ")
       .trim();
+  }
+
+  function needsInlineMarkdownSeparator(left, right) {
+    if (!left || !right) {
+      return false;
+    }
+
+    return /\*{1,3}$/.test(left) && /^\*{1,3}/.test(right);
+  }
+
+  function appendInlineMarkdown(markdown, next) {
+    if (!next) {
+      return markdown;
+    }
+    return `${markdown}${needsInlineMarkdownSeparator(markdown, next) ? " " : ""}${next}`;
+  }
+
+  function joinInlineMarkdown(parts) {
+    return parts.reduce((markdown, next) => appendInlineMarkdown(markdown, next), "");
   }
 
   function getTagName(element) {
@@ -869,7 +889,7 @@
         }
 
         const prefix = "  ".repeat(depth);
-        const itemText = normalizeInline(directParts.join(""));
+        const itemText = normalizeInline(joinInlineMarkdown(directParts));
         const currentLine = `${prefix}${marker}${itemText ? ` ${itemText}` : ""}`;
         return [currentLine, ...nestedLists].filter(Boolean).join("\n");
       })
@@ -877,9 +897,7 @@
   }
 
   function renderInlineChildren(element, context) {
-    return Array.from(element.childNodes || [])
-      .map((child) => nodeToMarkdown(child, context))
-      .join("");
+    return joinInlineMarkdown(Array.from(element.childNodes || []).map((child) => nodeToMarkdown(child, context)));
   }
 
   function recordCitation(element, context) {
@@ -1015,7 +1033,7 @@
           blockParts.push(markdown);
         }
       } else {
-        inlineBuffer += nodeToMarkdown(child, context);
+        inlineBuffer = appendInlineMarkdown(inlineBuffer, nodeToMarkdown(child, context));
       }
     }
 

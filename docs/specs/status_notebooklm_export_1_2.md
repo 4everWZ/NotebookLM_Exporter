@@ -13,6 +13,7 @@ NotebookLM Export 1.2 fixes user-reported export and popup issues:
 - Popup DOM status displays the loaded DOM message count from scan results.
 - Formula export now prefers Gemini/Voyager-style source fields, LaTeX annotations, and supported NotebookLM KaTeX visual-DOM inference before falling back to non-empty visible-text warnings.
 - Formula Markdown now isolates display math delimiters on their own lines and spaces inline formulas away from surrounding prose for Typora-style renderers.
+- Adjacent source citation markers and adjacent generated emphasis spans are separated so exports do not contain ambiguous `[4][5]` or `****` runs between independent inline tokens.
 
 ## In Scope
 
@@ -26,6 +27,8 @@ NotebookLM Export 1.2 fixes user-reported export and popup issues:
 - Disable NotebookLM heading role/class conversion for user prompts while preserving assistant headings.
 - Keep scan/export gated on `complete` lazy-load status.
 - Show `DOM: complete, loaded: N` in the popup when scan returns a loaded DOM message count.
+- Keep adjacent citation references visually separate in Markdown output.
+- Keep generated emphasis delimiters parseable when adjacent bold/italic spans touch.
 
 ## Out of Scope
 
@@ -42,6 +45,7 @@ NotebookLM Export 1.2 fixes user-reported export and popup issues:
 - Summary extraction, user prompt heading handling, Markdown section rendering, and history counting: `src/extension/core.js`.
 - Formula source extraction and supported KaTeX visual-DOM inference: `src/extension/core.js`.
 - Typora-safe formula block boundaries, inline formula spacing, and unsupported visual inference fallback: `src/extension/core.js`.
+- Adjacent citation and emphasis delimiter spacing: `src/extension/core.js`.
 - Regression tests: `tests/dom-adapter.test.js`, `tests/renderer.test.js`, `tests/lazy-loader.test.js`.
 - Formula regression tests: `tests/formula.test.js`.
 - Version metadata: `manifest.json` and `package.json` are `1.2.0`.
@@ -51,6 +55,14 @@ NotebookLM Export 1.2 fixes user-reported export and popup issues:
 - `node --test tests/lazy-loader.test.js tests/dom-adapter.test.js tests/renderer.test.js`: targeted tests passed.
 - `npm test`: full suite passed.
 - `npm run build`: extension verification passed.
+- Adjacent citation/emphasis regression tests:
+  - adjacent source markers export as `[4] [5]`
+  - adjacent bold spans export as `**a** **b**` instead of `**a****b**`
+  - single-star italic, double-star bold, and triple-star bold-italic output remains parseable
+- MC3WD adjacent inline Markdown smoke:
+  - `adjacentCitationCount=0`
+  - `starRunCount=0`
+  - sample repeated source citations render with a single separating space, such as `[17] [18]`
 - UAV saved HTML smoke:
   - `messageCount=6`
   - `historyMessageCount=6`
