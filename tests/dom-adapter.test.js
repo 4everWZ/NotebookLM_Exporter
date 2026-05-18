@@ -91,6 +91,103 @@ test("preserves message-internal line breaks and paragraph boundaries", () => {
   assert.equal(data.messages[0].markdown, "First line\nSecond line\n\nSecond paragraph");
 });
 
+test("extracts NotebookLM starting summary before conversation messages", () => {
+  const fixture = doc({
+    title: "Summary Test - NotebookLM",
+    children: [
+      el("div", { class: "chat-panel-content" }, [
+        el("div", { class: "chat-panel-empty-state" }, [
+          el("span", { class: "notebook-summary mat-body-medium" }, [
+            el("div", { class: "summary-content" }, [
+              el("p", {}, ["Notebook summary first paragraph."]),
+              el("ul", {}, [el("li", {}, ["Key summary point"])]),
+            ]),
+          ]),
+        ]),
+        el("div", { class: "chat-message-pair" }, [
+          el("mat-card", { class: "from-user-message-card-content" }, [
+            el("mat-card-content", { class: "message-content from-user-message-inner-content" }, [
+              el("p", {}, ["Question after summary."]),
+            ]),
+          ]),
+        ]),
+      ]),
+    ],
+  });
+
+  const data = extractNotebookData(fixture, {
+    exportedAt: "2026-05-18T10:00:00.000Z",
+    historyLoadStatus: "complete",
+  });
+
+  assert.deepEqual(data.summary, {
+    markdown: ["Notebook summary first paragraph.", "", "- Key summary point"].join("\n"),
+  });
+  assert.equal(data.messages[0].markdown, "Question after summary.");
+});
+
+test("keeps user prompt wrappers marked as heading as plain message text", () => {
+  const fixture = doc({
+    title: "User Heading Wrapper Test - NotebookLM",
+    children: [
+      el("div", { class: "chat-panel-content" }, [
+        el("div", { class: "chat-message-pair" }, [
+          el("mat-card", { class: "from-user-message-card-content" }, [
+            el("mat-card-content", { class: "message-content from-user-message-inner-content" }, [
+              el("div", { class: "message-text-content mat-body-medium" }, [
+                el("div", { class: "md3-body-text ng-star-inserted", role: "heading", "aria-level": "3" }, [
+                  el("p", {}, ["This user prompt should stay plain text."]),
+                ]),
+              ]),
+            ]),
+          ]),
+          el("mat-card", { class: "to-user-message-card-content" }, [
+            el("mat-card-content", { class: "message-content to-user-message-inner-content" }, [
+              el("div", { class: "paragraph heading3", role: "heading", "aria-level": "3" }, [
+                "Assistant heading should remain structured.",
+              ]),
+            ]),
+          ]),
+        ]),
+      ]),
+    ],
+  });
+
+  const data = extractNotebookData(fixture, {
+    exportedAt: "2026-05-18T10:00:00.000Z",
+    historyLoadStatus: "complete",
+  });
+
+  assert.equal(data.messages[0].markdown, "This user prompt should stay plain text.");
+  assert.equal(data.messages[1].markdown, "### Assistant heading should remain structured.");
+});
+
+test("keeps user prompt wrappers with NotebookLM heading classes as plain message text", () => {
+  const fixture = doc({
+    title: "User Heading Class Test - NotebookLM",
+    children: [
+      el("div", { class: "chat-panel-content" }, [
+        el("div", { class: "chat-message-pair" }, [
+          el("mat-card", { class: "from-user-message-card-content" }, [
+            el("mat-card-content", { class: "message-content from-user-message-inner-content" }, [
+              el("div", { class: "message-text-content mat-body-medium" }, [
+                el("div", { class: "paragraph heading3" }, ["User text should still not become a heading."]),
+              ]),
+            ]),
+          ]),
+        ]),
+      ]),
+    ],
+  });
+
+  const data = extractNotebookData(fixture, {
+    exportedAt: "2026-05-18T10:00:00.000Z",
+    historyLoadStatus: "complete",
+  });
+
+  assert.equal(data.messages[0].markdown, "User text should still not become a heading.");
+});
+
 test("renders headings, inline rich text, links, and code blocks as Markdown", () => {
   const fixture = doc({
     title: "Rich Text Test - NotebookLM",

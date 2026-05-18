@@ -107,6 +107,9 @@ if (!popupJs.includes('document.getElementById("scan-conversation")')) {
 if (!popupJs.includes("message-preview")) {
   fail("popup.js must render message previews with .message-preview for bounded popup layout");
 }
+if (!popupJs.includes("historyMessageCount")) {
+  fail("popup.js must display the loaded DOM message count from scan historyMessageCount");
+}
 
 const popupCss = readText("src/extension/popup.css");
 const bodyRule = popupCss.match(/body\s*\{[^}]*\}/);

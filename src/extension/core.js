@@ -57,12 +57,17 @@
       .join("\n\n");
   }
 
+  function renderSummary(summary) {
+    const markdown = String((summary && summary.markdown) || summary || "").trim();
+    return markdown ? ["## Notebook Summary", "", markdown].join("\n") : "";
+  }
+
   function renderMarkdown(exportData) {
     const data = exportData || {};
     const metadata = data.metadata || {};
     const title = metadata.title || "NotebookLM Export";
 
-    const sections = [
+    const frontmatter = [
       "---",
       `title: ${yamlString(title)}`,
       `source_url: ${yamlString(metadata.url || "")}`,
@@ -73,19 +78,17 @@
       `selected_message_count: ${numberValue(metadata.selectedMessageCount ?? metadata.messageCount)}`,
       `source_count: ${numberValue(metadata.sourceCount)}`,
       "---",
-      "",
+    ];
+    const conversation = ["## Conversation", "", renderMessages(data.messages)].filter((section) => section !== "").join("\n");
+    const sections = [
       `# ${title}`,
-      "",
-      "## Conversation",
-      "",
-      renderMessages(data.messages),
-      "",
+      renderSummary(data.summary),
+      conversation,
       renderSources(data.sources),
-      "",
       renderWarnings(data.warnings),
     ];
 
-    return `${sections.filter((section) => section !== "").join("\n").trimEnd()}\n`;
+    return `${frontmatter.join("\n")}\n\n${sections.filter((section) => section !== "").join("\n\n").trimEnd()}\n`;
   }
 
   function hasClass(element, className) {
@@ -225,11 +228,21 @@
     return /^h[1-6]$/.test(tagName);
   }
 
-  function getHeadingLevel(element) {
+  function getHeadingLevel(element, context = {}) {
     const tagName = getTagName(element);
 
     if (isHeadingTag(tagName)) {
       return Number(tagName.slice(1));
+    }
+
+    if (context.disableNotebookHeadings) {
+      return 0;
+    }
+
+    const className = String((element && element.getAttribute && element.getAttribute("class")) || element?.className || "");
+    const classLevel = className.match(/\bheading([1-6])\b/);
+    if (classLevel) {
+      return Number(classLevel[1]);
     }
 
     const role = element && element.getAttribute && element.getAttribute("role");
@@ -238,18 +251,16 @@
       return ariaLevel;
     }
 
-    const className = String((element && element.getAttribute && element.getAttribute("class")) || element?.className || "");
-    const classLevel = className.match(/\bheading([1-6])\b/);
-    return classLevel ? Number(classLevel[1]) : 0;
+    return 0;
   }
 
-  function isBlockElement(element) {
+  function isBlockElement(element, context = {}) {
     const tagName = getTagName(element);
-    return BLOCK_TAGS.has(tagName) || getHeadingLevel(element) > 0;
+    return BLOCK_TAGS.has(tagName) || getHeadingLevel(element, context) > 0;
   }
 
-  function hasBlockChildren(element) {
-    return Array.from((element && element.children) || []).some((child) => isBlockElement(child));
+  function hasBlockChildren(element, context = {}) {
+    return Array.from((element && element.children) || []).some((child) => isBlockElement(child, context));
   }
 
   function getTitle(documentRef) {
@@ -340,7 +351,7 @@
             if (nested) {
               nestedLists.push(nested);
             }
-          } else if (isElement(itemChild) && (isBlockElement(itemChild) || hasBlockChildren(itemChild))) {
+          } else if (isElement(itemChild) && (isBlockElement(itemChild, context) || hasBlockChildren(itemChild, context))) {
             directParts.push(renderBlockElement(itemChild, context));
           } else {
             directParts.push(nodeToMarkdown(itemChild, context));
@@ -404,7 +415,7 @@
       return `\`${String(node.textContent || "").trim()}\``;
     }
 
-    const headingLevel = getHeadingLevel(node);
+    const headingLevel = getHeadingLevel(node, context);
     if (headingLevel) {
       const text = normalizeInline(renderInlineChildren(node, context));
       return text ? `${"#".repeat(headingLevel)} ${text}` : "";
@@ -439,7 +450,7 @@
 
   function renderBlockElement(element, context) {
     const tagName = getTagName(element);
-    const headingLevel = getHeadingLevel(element);
+    const headingLevel = getHeadingLevel(element, context);
 
     if (headingLevel || ["ul", "ol", "pre", "table"].includes(tagName)) {
       return nodeToMarkdown(element, context).trim();
@@ -461,7 +472,7 @@
         .join("\n");
     }
 
-    if (hasBlockChildren(element)) {
+    if (hasBlockChildren(element, context)) {
       return elementToMarkdown(element, context);
     }
 
@@ -486,7 +497,7 @@
         continue;
       }
 
-      if (isElement(child) && (isBlockElement(child) || hasBlockChildren(child))) {
+      if (isElement(child) && (isBlockElement(child, context) || hasBlockChildren(child, context))) {
         flushInlineBuffer();
         const markdown = renderBlockElement(child, context).trim();
         if (markdown) {
@@ -506,9 +517,9 @@
     return blockParts.join("\n\n");
   }
 
-  function extractMessageMarkdown(container, warnings) {
+  function extractMessageMarkdown(container, warnings, options = {}) {
     const body = queryFirst(container, [".message-text-content", ".message-content"]) || container;
-    const context = { citations: [], warnings };
+    const context = { citations: [], warnings, disableNotebookHeadings: Boolean(options.disableNotebookHeadings) };
     const markdown = elementToMarkdown(body, context);
 
     return {
@@ -517,9 +528,22 @@
     };
   }
 
+  function extractNotebookSummary(documentRef, warnings) {
+    const summaryContainer = queryFirst(documentRef, [".summary-content", ".notebook-summary"]);
+
+    if (!summaryContainer) {
+      return null;
+    }
+
+    const context = { citations: [], warnings };
+    const markdown = elementToMarkdown(summaryContainer, context).trim();
+    return markdown ? { markdown } : null;
+  }
+
   function extractNotebookData(documentRef, options = {}) {
     const warnings = [];
     const sources = extractSources(documentRef);
+    const summary = extractNotebookSummary(documentRef, warnings);
     const pairs = queryAll(documentRef, ".chat-message-pair");
     const messages = [];
 
@@ -528,7 +552,7 @@
       const assistantContainer = queryFirst(pair, [".to-user-message-inner-content", ".to-user-message-card-content"]);
 
       if (userContainer) {
-        const userMessage = extractMessageMarkdown(userContainer, warnings);
+        const userMessage = extractMessageMarkdown(userContainer, warnings, { disableNotebookHeadings: true });
         messages.push({
           id: `m${messages.length + 1}`,
           role: "user",
@@ -557,6 +581,7 @@
         messageCount: messages.length,
         sourceCount: sources.length,
       },
+      summary,
       sources,
       messages,
       warnings,
@@ -663,6 +688,11 @@
   }
 
   function countLoadedMessages(documentRef) {
+    const individualMessageCount = queryAll(documentRef, ".individual-message").length;
+    if (individualMessageCount > 0) {
+      return individualMessageCount;
+    }
+
     const pairCount = queryAll(documentRef, ".chat-message-pair").length;
     if (pairCount > 0) {
       return pairCount;
@@ -673,7 +703,7 @@
       return chatMessageCount;
     }
 
-    return queryAll(documentRef, ".individual-message").length;
+    return 0;
   }
 
   function hasLoadingIndicator(documentRef) {

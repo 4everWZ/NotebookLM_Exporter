@@ -31,8 +31,10 @@ function setCounts(messageCount, sourceCount) {
   elements.sourceCount.textContent = `Sources: ${Number(sourceCount || 0)}`;
 }
 
-function setHistoryStatus(status) {
-  elements.historyStatus.textContent = `DOM: ${status || "unknown"}`;
+function setHistoryStatus(status, historyMessageCount) {
+  const count = Number(historyMessageCount);
+  const countLabel = Number.isFinite(count) && count > 0 ? `, loaded: ${count}` : "";
+  elements.historyStatus.textContent = `DOM: ${status || "unknown"}${countLabel}`;
 }
 
 async function getActiveTab() {
@@ -112,7 +114,7 @@ function renderMessages(messages) {
 function renderScan(scan) {
   state.scan = scan;
   setCounts(scan && scan.messageCount, scan && scan.sourceCount);
-  setHistoryStatus(scan && scan.status);
+  setHistoryStatus(scan && scan.status, scan && scan.historyMessageCount);
   renderMessages(scan && scan.messages);
 
   if (!scan) {

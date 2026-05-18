@@ -36,6 +36,29 @@ test("completes after loaded message count and top scroll position stabilize", a
   assert.equal(scroller.scrollTop, 0);
 });
 
+test("counts individual NotebookLM messages before chat pairs when both are present", async () => {
+  const scroller = el("div", { class: "chat-panel-content", scrollTop: 100 }, [
+    el("div", { class: "chat-message-pair" }, [
+      el("chat-message", { class: "individual-message" }, ["user 1"]),
+      el("chat-message", { class: "individual-message" }, ["assistant 1"]),
+    ]),
+    el("div", { class: "chat-message-pair" }, [
+      el("chat-message", { class: "individual-message" }, ["user 2"]),
+      el("chat-message", { class: "individual-message" }, ["assistant 2"]),
+    ]),
+  ]);
+  const documentRef = doc({ children: [scroller] });
+
+  const result = await loadFullHistory(documentRef, {
+    stableChecks: 1,
+    maxAttempts: 2,
+    wait: async () => {},
+  });
+
+  assert.equal(result.status, "complete");
+  assert.equal(result.messageCount, 4);
+});
+
 test("times out when message count never stabilizes", async () => {
   const scroller = el("div", { class: "chat-panel-content", scrollTop: 100 }, [pair("1")]);
   const documentRef = doc({ children: [scroller] });

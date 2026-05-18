@@ -6,10 +6,12 @@ Browser extension for exporting NotebookLM conversations to structured Markdown.
 
 - Manifest V3 browser extension.
 - Exports the current NotebookLM conversation to `.md`.
+- Includes the NotebookLM starting summary when the page exposes `.summary-content` / `.notebook-summary`.
 - Automatically attempts to load lazy conversation history before export.
-- Shows detected message count, source count, and DOM/history completeness in the popup after the user clicks Scan.
+- Shows detected message count, source count, DOM/history completeness, and loaded DOM message count in the popup after the user clicks Scan.
 - Supports all-message export by default and checked-message export when selected.
 - Preserves structured turns, internal message line breaks, sources, citations, paragraphs, headings, lists, code blocks, tables, links, emphasis, inline code, and basic formulas.
+- Keeps user prompt text as message body text even when NotebookLM marks the prompt wrapper with heading roles or heading classes.
 - Uses LaTeX annotations when available and records warnings when formula markup is unsupported.
 
 PDF export and full Gemini/Voyager formula-copy compatibility are future work.
@@ -26,6 +28,18 @@ PDF export and full Gemini/Voyager formula-copy compatibility are future work.
 8. Click Scan and wait for the popup to show `DOM: complete`.
 9. Keep `All` selected or switch to `Checked` and choose messages.
 10. Click Export Markdown.
+
+## Scan Completeness
+
+Scan and export both run the same lazy-load gate before extracting Markdown:
+
+- The content script scrolls the chat panel to the top repeatedly.
+- It waits for the loaded message count and top scroll position to stay stable across multiple checks.
+- It refuses `complete` while NotebookLM loading indicators are visible.
+- It counts `.individual-message` nodes when NotebookLM exposes them, falling back to `.chat-message-pair` / `chat-message` for older DOM shapes, and the popup shows that loaded DOM count.
+- Export throws instead of downloading if the scan status is not `complete`.
+
+The saved NotebookLM fixtures checked so far do not expose a separate visible total-message counter; completeness is inferred from DOM stabilization plus loading-state absence.
 
 ## Verify Locally
 

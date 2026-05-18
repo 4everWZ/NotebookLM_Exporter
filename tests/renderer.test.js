@@ -15,6 +15,9 @@ test("renders deterministic structured Markdown with frontmatter, turns, sources
       sourceCount: 1,
       selectedMessageCount: 2,
     },
+    summary: {
+      markdown: ["Notebook starts with a concise source summary.", "", "- Covers the benchmark motivation"].join("\n"),
+    },
     messages: [
       {
         id: "m1",
@@ -58,6 +61,10 @@ test("renders deterministic structured Markdown with frontmatter, turns, sources
   assert.match(first, /message_count: 2/);
   assert.match(first, /selected_message_count: 2/);
   assert.match(first, /# MC3WD: Export Test/);
+  assert.match(
+    first,
+    /## Notebook Summary\n\nNotebook starts with a concise source summary\.\n\n- Covers the benchmark motivation\n\n## Conversation/,
+  );
   assert.match(first, /## Conversation/);
   assert.match(first, /### User\n\nSummarize the method\./);
   assert.match(first, /### NotebookLM\n\nThe method has three parts:/);
