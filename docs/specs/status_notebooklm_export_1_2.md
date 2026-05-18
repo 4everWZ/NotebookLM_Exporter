@@ -11,6 +11,7 @@ NotebookLM Export 1.2 fixes user-reported export and popup issues:
 - User prompt wrappers that NotebookLM marks with heading roles or heading classes remain plain user message text.
 - Lazy-load history counts prefer `.individual-message` nodes when present so DOM history count tracks exported message count rather than chat-pair count.
 - Popup DOM status displays the loaded DOM message count from scan results.
+- Formula export now prefers Gemini/Voyager-style source fields, LaTeX annotations, and supported NotebookLM KaTeX visual-DOM inference before falling back to non-empty visible-text warnings.
 
 ## In Scope
 
@@ -28,7 +29,7 @@ NotebookLM Export 1.2 fixes user-reported export and popup issues:
 ## Out of Scope
 
 - PDF export.
-- Full Gemini/Voyager formula-copy compatibility.
+- Full Gemini/Voyager formula-copy UI and Word/MathML compatibility.
 - Private NotebookLM API extraction.
 - Live authenticated NotebookLM automation in the current Playwright context.
 
@@ -38,7 +39,9 @@ NotebookLM Export 1.2 fixes user-reported export and popup issues:
 - Static contract checks: `scripts/verify-extension.js`.
 - Rich-text wrapper extraction: `src/extension/core.js`.
 - Summary extraction, user prompt heading handling, Markdown section rendering, and history counting: `src/extension/core.js`.
+- Formula source extraction and supported KaTeX visual-DOM inference: `src/extension/core.js`.
 - Regression tests: `tests/dom-adapter.test.js`, `tests/renderer.test.js`, `tests/lazy-loader.test.js`.
+- Formula regression tests: `tests/formula.test.js`.
 - Version metadata: `manifest.json` and `package.json` are `1.2.0`.
 
 ## Validation Snapshot
@@ -66,8 +69,14 @@ NotebookLM Export 1.2 fixes user-reported export and popup issues:
   - default mode remained `All`
   - selected mode disabled export until a message was checked
   - selected export sent `{ mode: "selected", selectedMessageIds: ["m2"] }`
+- MC3WD formula saved HTML smoke:
+  - `messageCount=28`
+  - `formulaWarningCount=0`
+  - `mathDelimiterCount=942`
+  - sample formulas included `$GB_i$`, `$$ p_k(GB_i)=\frac{...}{...} $$`, and `$$ H(GB_i)=-\sum_{k=1}^C... $$`
 
 ## Known Boundaries
 
 - Live authenticated NotebookLM popup/export still requires the user's logged-in browser session.
 - The UAV smoke uses the saved HTML under ignored `html_tset/`.
+- KaTeX visual-DOM inference is conservative and does not claim full original-source recovery for every possible KaTeX construct.

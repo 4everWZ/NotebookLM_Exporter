@@ -2,7 +2,7 @@
 
 ## Objective
 
-Deliver NotebookLM Export 1.2: scan starts only after the user clicks Scan, and NotebookLM structural rich-text wrappers no longer flatten headings, tables, and adjacent blocks in Markdown exports.
+Deliver NotebookLM Export 1.2: scan starts only after the user clicks Scan, NotebookLM structural rich-text wrappers no longer flatten headings, tables, and adjacent blocks in Markdown exports, and saved-page formulas export as Markdown LaTeX when supported source or KaTeX visual DOM is available.
 
 | Requirement ID | Original Intent | Current Status | Implementation Pointer | Verification Pointer | Notes |
 |---|---|---|---|---|---|
@@ -16,3 +16,4 @@ Deliver NotebookLM Export 1.2: scan starts only after the user clicks Scan, and 
 | R8 | Export should include the NotebookLM starting summary | Implemented | `src/extension/core.js` extracts `.summary-content` / `.notebook-summary` and renders `## Notebook Summary` | `tests/dom-adapter.test.js`; `tests/renderer.test.js`; saved HTML smoke | Summary appears before `## Conversation` |
 | R9 | User prompt content must not all become H3 headings | Implemented | `src/extension/core.js` disables NotebookLM heading role/class conversion when extracting user messages | `tests/dom-adapter.test.js`; saved HTML smoke | Assistant `.headingN` headings remain Markdown headings |
 | R10 | Scan/export must only proceed after lazy history is complete | Implemented | `src/extension/content-script.js` gates scan/export through `loadAndExtractConversation`; `src/extension/core.js` `loadFullHistory`; `src/extension/popup.js` displays `historyMessageCount` | `tests/lazy-loader.test.js`; `tests/selection.test.js`; `scripts/verify-extension.js`; popup and saved HTML smokes; `README.md` scan completeness notes | Loader handles repeated lazy loads by scrolling to top until count/top stabilize and no loader is visible; export throws unless status is `complete`; popup shows loaded DOM count |
+| R11 | Saved NotebookLM KaTeX formulas should export as Markdown LaTeX instead of `unsupported_formula` warnings when recoverable | Implemented | `src/extension/core.js` formula source extraction and KaTeX visual-DOM inference | `tests/formula.test.js`; MC3WD saved HTML Playwright smoke showed `formulaWarningCount=0` and 942 dollar delimiters | Inspired by Gemini/Voyager's source-field-first strategy; full formula-copy UI/MathML compatibility remains out of scope |

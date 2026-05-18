@@ -105,13 +105,454 @@
       .includes(className);
   }
 
+  function directChildren(element) {
+    return Array.from((element && element.children) || []).filter(isElement);
+  }
+
+  function childNodes(element) {
+    return Array.from((element && element.childNodes) || []);
+  }
+
+  function firstChildWithClass(element, className) {
+    return directChildren(element).find((child) => hasClass(child, className)) || null;
+  }
+
+  function closestWithClass(element, className, stopAt) {
+    let current = element && element.parentNode;
+    while (current && current !== stopAt) {
+      if (hasClass(current, className)) {
+        return current;
+      }
+      current = current.parentNode;
+    }
+    return null;
+  }
+
+  function hasAncestorClass(element, className) {
+    let current = element && element.parentNode;
+    while (current) {
+      if (hasClass(current, className)) {
+        return true;
+      }
+      current = current.parentNode;
+    }
+    return false;
+  }
+
+  function walkElementLike(root) {
+    const results = [];
+    const stack = root ? [root] : [];
+
+    while (stack.length > 0) {
+      const current = stack.shift();
+      if (!current || typeof current.getAttribute !== "function") {
+        continue;
+      }
+
+      results.push(current);
+      stack.unshift(...childNodes(current).filter((child) => child && typeof child.getAttribute === "function"));
+    }
+
+    return results;
+  }
+
+  function getTrimmedAttribute(element, name) {
+    if (!element || typeof element.getAttribute !== "function") {
+      return "";
+    }
+    return String(element.getAttribute(name) || "").trim();
+  }
+
+  function getFormulaAttributeSource(element) {
+    const attributeNames = ["data-math", "data-latex", "data-tex"];
+
+    for (const candidate of walkElementLike(element)) {
+      for (const attributeName of attributeNames) {
+        const value = getTrimmedAttribute(candidate, attributeName);
+        if (value) {
+          return value;
+        }
+      }
+    }
+
+    return "";
+  }
+
   function getFormulaAnnotation(element) {
     if (!element || typeof element.querySelector !== "function") {
       return "";
     }
 
     const annotation = element.querySelector('annotation[encoding="application/x-tex"]');
-    return annotation && annotation.textContent ? annotation.textContent.trim() : "";
+    if (annotation && annotation.textContent) {
+      return annotation.textContent.trim();
+    }
+
+    let fallback = "";
+    for (const candidate of walkElementLike(element)) {
+      if (getTagName(candidate) !== "annotation") {
+        continue;
+      }
+
+      const value = String(candidate.textContent || "").trim();
+      if (!value) {
+        continue;
+      }
+
+      const encoding = getTrimmedAttribute(candidate, "encoding").toLowerCase();
+      if (encoding.includes("x-tex") || encoding === "tex" || encoding === "latex") {
+        return value;
+      }
+
+      fallback = fallback || value;
+    }
+
+    return fallback;
+  }
+
+  function stripFormulaDelimiters(latex) {
+    const trimmed = String(latex || "").trim();
+
+    if (trimmed.startsWith("$$") && trimmed.endsWith("$$")) {
+      return trimmed.slice(2, -2).trim();
+    }
+
+    if (trimmed.startsWith("\\[") && trimmed.endsWith("\\]")) {
+      return trimmed.slice(2, -2).trim();
+    }
+
+    if (trimmed.startsWith("\\(") && trimmed.endsWith("\\)")) {
+      return trimmed.slice(2, -2).trim();
+    }
+
+    if (trimmed.startsWith("$") && trimmed.endsWith("$")) {
+      return trimmed.slice(1, -1).trim();
+    }
+
+    return trimmed;
+  }
+
+  const TEXT_SYMBOL_LATEX = new Map([
+    ["α", "\\alpha"],
+    ["β", "\\beta"],
+    ["γ", "\\gamma"],
+    ["δ", "\\delta"],
+    ["ϵ", "\\epsilon"],
+    ["ε", "\\epsilon"],
+    ["θ", "\\theta"],
+    ["λ", "\\lambda"],
+    ["μ", "\\mu"],
+    ["π", "\\pi"],
+    ["ρ", "\\rho"],
+    ["σ", "\\sigma"],
+    ["τ", "\\tau"],
+    ["φ", "\\phi"],
+    ["ω", "\\omega"],
+    ["Γ", "\\Gamma"],
+    ["Δ", "\\Delta"],
+    ["Θ", "\\Theta"],
+    ["Λ", "\\Lambda"],
+    ["Π", "\\Pi"],
+    ["Σ", "\\Sigma"],
+    ["Φ", "\\Phi"],
+    ["Ω", "\\Omega"],
+    ["∑", "\\sum"],
+    ["∏", "\\prod"],
+    ["∈", "\\in"],
+    ["∉", "\\notin"],
+    ["∞", "\\infty"],
+    ["≤", "\\le"],
+    ["≥", "\\ge"],
+    ["≠", "\\ne"],
+    ["≈", "\\approx"],
+    ["×", "\\times"],
+    ["÷", "\\div"],
+    ["±", "\\pm"],
+    ["−", "-"],
+    ["→", "\\to"],
+    ["←", "\\leftarrow"],
+    ["↔", "\\leftrightarrow"],
+    ["⇒", "\\Rightarrow"],
+    ["⇐", "\\Leftarrow"],
+    ["⇔", "\\Leftrightarrow"],
+    ["∣", "|"],
+    ["‖", "\\|"],
+    ["√", "\\sqrt"],
+  ]);
+
+  const NAMED_OPERATORS = new Set(["arccos", "arcsin", "arctan", "cos", "det", "dim", "exp", "ln", "log", "max", "min", "sin", "tan"]);
+  const LATEX_COMMANDS_REQUIRING_BOUNDARY = [
+    "Rightarrow",
+    "Leftarrow",
+    "Leftrightarrow",
+    "leftrightarrow",
+    "leftarrow",
+    "notin",
+    "alpha",
+    "beta",
+    "gamma",
+    "delta",
+    "epsilon",
+    "theta",
+    "lambda",
+    "mu",
+    "pi",
+    "rho",
+    "sigma",
+    "tau",
+    "phi",
+    "omega",
+    "Gamma",
+    "Delta",
+    "Theta",
+    "Lambda",
+    "Pi",
+    "Sigma",
+    "Phi",
+    "Omega",
+    "sum",
+    "prod",
+    "in",
+    "le",
+    "ge",
+    "ne",
+    "approx",
+    "times",
+    "div",
+    "pm",
+    "to",
+    ...NAMED_OPERATORS,
+  ];
+
+  function normalizeKatexText(text, element) {
+    const raw = String(text || "").replace(/[\u200B-\u200D\uFEFF]/g, "").trim();
+    if (!raw) {
+      return "";
+    }
+
+    if (hasClass(element, "mathbb")) {
+      return `\\mathbb{${raw}}`;
+    }
+
+    if (hasClass(element, "mathcal")) {
+      return `\\mathcal{${raw}}`;
+    }
+
+    if (hasClass(element, "mop") && NAMED_OPERATORS.has(raw)) {
+      return `\\${raw}`;
+    }
+
+    if (NAMED_OPERATORS.has(raw) && !hasClass(element, "mathnormal")) {
+      return `\\${raw}`;
+    }
+
+    return Array.from(raw)
+      .map((character) => TEXT_SYMBOL_LATEX.get(character) || character)
+      .join("");
+  }
+
+  function formatLatexScript(marker, latex) {
+    const value = String(latex || "").trim();
+    if (!value) {
+      return "";
+    }
+
+    return /^[A-Za-z0-9]$/.test(value) ? `${marker}${value}` : `${marker}{${value}}`;
+  }
+
+  function parseTopValue(element) {
+    let current = element;
+    while (current) {
+      const style = getTrimmedAttribute(current, "style");
+      const match = style.match(/(?:^|;)\s*top:\s*(-?\d+(?:\.\d+)?)em\b/);
+      if (match) {
+        return Number(match[1]);
+      }
+      current = current.parentNode;
+    }
+    return Number.NaN;
+  }
+
+  function parseKatexNode(node) {
+    if (isText(node)) {
+      return normalizeKatexText(node.textContent, null);
+    }
+
+    if (!isElement(node)) {
+      return "";
+    }
+
+    return parseKatexElement(node);
+  }
+
+  function parseKatexNodes(nodes) {
+    return Array.from(nodes || [])
+      .map((node) => parseKatexNode(node))
+      .join("");
+  }
+
+  function hasDirectChildWithClass(element, className) {
+    return directChildren(element).some((child) => hasClass(child, className));
+  }
+
+  function shouldIgnoreKatexElement(element) {
+    return ["strut", "pstrut", "mspace", "vlist-s", "frac-line", "msupsub"].some((className) =>
+      hasClass(element, className),
+    );
+  }
+
+  function primaryVlistRows(element) {
+    const vlistT = firstChildWithClass(element, "vlist-t");
+    const vlistR = firstChildWithClass(vlistT, "vlist-r");
+    const vlist = firstChildWithClass(vlistR, "vlist");
+    return directChildren(vlist);
+  }
+
+  function parseKatexRow(row) {
+    return parseKatexNodes(childNodes(row)).trim();
+  }
+
+  function sortedVisualRows(element) {
+    return primaryVlistRows(element)
+      .map((row, index) => ({
+        index,
+        top: parseTopValue(row),
+        latex: parseKatexRow(row),
+      }))
+      .filter((row) => row.latex)
+      .sort((left, right) => {
+        const leftTop = Number.isFinite(left.top) ? left.top : left.index;
+        const rightTop = Number.isFinite(right.top) ? right.top : right.index;
+        return leftTop - rightTop;
+      });
+  }
+
+  function parseKatexFraction(element) {
+    const rows = sortedVisualRows(element);
+    if (rows.length < 2) {
+      return parseKatexNodes(childNodes(element));
+    }
+
+    const numerator = rows[0].latex;
+    const denominator = rows[rows.length - 1].latex;
+    return `\\frac{${numerator}}{${denominator}}`;
+  }
+
+  function parseKatexOperatorLimits(element) {
+    const rows = sortedVisualRows(element);
+    const operatorIndex = rows.findIndex((row) => /\\(?:sum|prod)|[∑∏]/.test(row.latex));
+
+    if (operatorIndex === -1) {
+      return parseKatexNodes(childNodes(element));
+    }
+
+    const operator = rows[operatorIndex].latex;
+    const superscript = rows.slice(0, operatorIndex).map((row) => row.latex).join("");
+    const subscript = rows.slice(operatorIndex + 1).map((row) => row.latex).join("");
+    return `${operator}${formatLatexScript("_", subscript)}${formatLatexScript("^", superscript)}`;
+  }
+
+  function topLevelScriptCandidates(msupsub) {
+    return queryAll(msupsub, ".sizing").filter((candidate) => !closestWithClass(candidate, "sizing", msupsub));
+  }
+
+  function parseKatexScripts(msupsub) {
+    const candidates = topLevelScriptCandidates(msupsub).map((candidate, index) => ({
+      index,
+      top: parseTopValue(candidate),
+      latex: parseKatexNodes(childNodes(candidate)).trim(),
+    })).filter((candidate) => candidate.latex);
+
+    if (candidates.length === 0) {
+      return { subscript: "", superscript: "" };
+    }
+
+    candidates.sort((left, right) => {
+      const leftTop = Number.isFinite(left.top) ? left.top : left.index;
+      const rightTop = Number.isFinite(right.top) ? right.top : right.index;
+      return leftTop - rightTop;
+    });
+
+    if (candidates.length === 1) {
+      const vlistT = queryFirst(msupsub, [".vlist-t"]);
+      if (hasClass(vlistT, "vlist-t2")) {
+        return { subscript: candidates[0].latex, superscript: "" };
+      }
+      return { subscript: "", superscript: candidates[0].latex };
+    }
+
+    return {
+      subscript: candidates[candidates.length - 1].latex,
+      superscript: candidates[0].latex,
+    };
+  }
+
+  function parseKatexScriptedElement(element) {
+    const nodes = childNodes(element);
+    const scriptIndex = nodes.findIndex((node) => isElement(node) && hasClass(node, "msupsub"));
+
+    if (scriptIndex === -1) {
+      return "";
+    }
+
+    const base = parseKatexNodes(nodes.slice(0, scriptIndex));
+    const scripts = parseKatexScripts(nodes[scriptIndex]);
+    const after = parseKatexNodes(nodes.slice(scriptIndex + 1));
+    return `${base}${formatLatexScript("_", scripts.subscript)}${formatLatexScript("^", scripts.superscript)}${after}`;
+  }
+
+  function parseKatexElement(element) {
+    if (shouldIgnoreKatexElement(element)) {
+      return "";
+    }
+
+    if (hasClass(element, "mfrac")) {
+      return parseKatexFraction(element);
+    }
+
+    if (hasClass(element, "op-limits")) {
+      return parseKatexOperatorLimits(element);
+    }
+
+    if (hasDirectChildWithClass(element, "msupsub")) {
+      return parseKatexScriptedElement(element);
+    }
+
+    const children = childNodes(element);
+    if (children.length === 0) {
+      return normalizeKatexText(element.textContent, element);
+    }
+
+    if (!children.some(isElement)) {
+      return normalizeKatexText(element.textContent, element);
+    }
+
+    return parseKatexNodes(children);
+  }
+
+  function inferKatexVisualLatex(element) {
+    const katexHtml = hasClass(element, "katex-html") ? element : queryFirst(element, [".katex-html"]);
+    if (!katexHtml) {
+      return "";
+    }
+
+    return normalizeInferredKatexLatex(parseKatexElement(katexHtml));
+  }
+
+  function normalizeInferredKatexLatex(latex) {
+    let normalized = String(latex || "").replace(/[\u200B-\u200D\uFEFF]/g, "").trim();
+
+    for (const command of LATEX_COMMANDS_REQUIRING_BOUNDARY) {
+      normalized = normalized.replace(new RegExp(`\\\\${command}(?=[A-Za-z0-9])`, "g"), `\\${command} `);
+    }
+
+    return normalized;
+  }
+
+  function getFormulaLatex(element) {
+    return stripFormulaDelimiters(
+      getFormulaAttributeSource(element) || getFormulaAnnotation(element) || inferKatexVisualLatex(element),
+    );
   }
 
   function isDisplayFormula(element) {
@@ -123,7 +564,7 @@
       return true;
     }
 
-    return hasClass(element, "katex-display");
+    return hasClass(element, "katex-display") || hasAncestorClass(element, "katex-display");
   }
 
   function addWarning(warnings, code, message) {
@@ -133,13 +574,19 @@
   }
 
   function extractFormulaMarkdown(element, warnings) {
-    const latex = getFormulaAnnotation(element);
+    const latex = getFormulaLatex(element);
 
     if (latex) {
       return isDisplayFormula(element) ? `$$\n${latex}\n$$` : `$${latex}$`;
     }
 
-    const visibleText = String((element && element.textContent) || "").trim();
+    const visibleText = String((element && element.textContent) || "")
+      .replace(/[\u200B-\u200D\uFEFF]/g, "")
+      .trim();
+    if (!visibleText) {
+      return "";
+    }
+
     addWarning(
       warnings,
       "unsupported_formula",

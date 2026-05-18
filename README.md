@@ -10,11 +10,11 @@ Browser extension for exporting NotebookLM conversations to structured Markdown.
 - Automatically attempts to load lazy conversation history before export.
 - Shows detected message count, source count, DOM/history completeness, and loaded DOM message count in the popup after the user clicks Scan.
 - Supports all-message export by default and checked-message export when selected.
-- Preserves structured turns, internal message line breaks, sources, citations, paragraphs, headings, lists, code blocks, tables, links, emphasis, inline code, and basic formulas.
+- Preserves structured turns, internal message line breaks, sources, citations, paragraphs, headings, lists, code blocks, tables, links, emphasis, inline code, and formulas.
 - Keeps user prompt text as message body text even when NotebookLM marks the prompt wrapper with heading roles or heading classes.
-- Uses LaTeX annotations when available and records warnings when formula markup is unsupported.
+- Uses Gemini/Voyager-style formula source fields, LaTeX annotations, and conservative NotebookLM KaTeX visual-DOM inference before falling back to visible text warnings.
 
-PDF export and full Gemini/Voyager formula-copy compatibility are future work.
+PDF export and full Gemini/Voyager formula-copy UI/MathML format compatibility are future work.
 
 ## Load the Extension
 

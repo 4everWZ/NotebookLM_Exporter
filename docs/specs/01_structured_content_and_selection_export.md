@@ -23,7 +23,7 @@ This is a Tier B behavior change. It changes user-visible export output, popup b
 - PDF export.
 - Full visual reproduction of NotebookLM formatting.
 - Private NotebookLM network/API extraction.
-- Full Gemini/Voyager formula-copy compatibility.
+- Full Gemini/Voyager formula-copy UI and Word/MathML compatibility.
 - Cross-device sync, saved presets, or persistent selection storage.
 - Selecting sources independently from messages.
 
@@ -268,7 +268,7 @@ The DOM adapter must stop using one global whitespace-collapse path for message 
 - `code` outside `pre` becomes inline code.
 - `a[href]` becomes `[text](href)` when both text and href are available; otherwise text is preserved.
 - Citation markers keep the existing bracket form, such as `[1]`.
-- Inline formulas keep `$...$` when LaTeX annotation is available.
+- Inline formulas keep `$...$` when a formula source field, LaTeX annotation, or supported NotebookLM KaTeX visual DOM is available.
 - Unsupported inline rich nodes fall back to their recursively extracted text and add a warning only when content would otherwise be ambiguous or lost.
 
 ### Newline Policy
@@ -281,14 +281,17 @@ The DOM adapter must stop using one global whitespace-collapse path for message 
 
 ## Formula Handling
 
-1.2 keeps the 1.0 formula behavior:
+1.2 extends formula handling beyond the 1.0 annotation-only path:
 
-- prefer `annotation[encoding="application/x-tex"]`,
+- prefer Gemini/Voyager-style `data-math`, `data-latex`, and `data-tex` formula source fields,
+- accept exact and variant LaTeX annotations such as `annotation[encoding="application/x-tex"]` and `application/x-tex; ...`,
+- infer common NotebookLM saved-page KaTeX visual DOM when no source field or annotation exists, including simple symbols, subscripts, superscripts, fractions, sum/product limits, named operators, Greek letters, and common mathematical symbols,
 - render display formulas as `$$ ... $$`,
 - render inline formulas as `$...$`,
-- preserve visible text and warning on unsupported markup.
+- ignore empty KaTeX spacing nodes,
+- preserve visible text and warning on unsupported non-empty formula markup.
 
-The structured extraction change must not collapse formula blocks into adjacent prose. Deeper Gemini/Voyager copy-format parsing remains future work until concrete copy-format samples are added.
+The structured extraction change must not collapse formula blocks into adjacent prose. The visual-DOM path is intentionally conservative: it aims to recover usable Markdown LaTeX from NotebookLM saved pages, but it is not full Gemini/Voyager formula-copy UI, selectable output-format, or Word/MathML compatibility.
 
 ## Error Handling
 
@@ -303,7 +306,7 @@ Blocking errors:
 
 Non-blocking warnings:
 
-- unsupported formula fallback,
+- unsupported non-empty formula fallback,
 - unsupported rich content flattened to text,
 - table fallback to plain text,
 - missing source title.
@@ -356,6 +359,12 @@ The popup does not parse NotebookLM DOM. It only consumes content-script scan re
   - headings,
   - inline bold/italic/link/code,
   - list structure.
+- Formula parser preserves:
+  - Gemini/Voyager-style `data-math` source,
+  - LaTeX annotation encoding variants,
+  - NotebookLM KaTeX visual DOM subscripts,
+  - NotebookLM KaTeX visual DOM fractions and superscripts,
+  - empty and zero-width-only KaTeX spacing nodes without warnings.
 - Renderer/frontmatter includes:
   - `export_mode`,
   - selected export count when applicable.
@@ -390,6 +399,7 @@ Use the saved NotebookLM HTML under ignored `html_tset/`:
 - run lazy-load/extract/render path where practical,
 - confirm extracted message count is non-zero,
 - confirm at least one exported message body contains preserved internal Markdown newlines when fixture content includes them.
+- confirm the MC3WD saved NotebookLM page exports formulas with Markdown LaTeX delimiters and no `unsupported_formula` warnings.
 
 Live authenticated NotebookLM export remains a manual verification path because current automated Playwright context does not have a NotebookLM login session.
 
@@ -407,6 +417,7 @@ Live authenticated NotebookLM export remains a manual verification path because 
 - Message internal line breaks are preserved in Markdown source.
 - Paragraphs, lists, code blocks, tables, headings, and basic inline rich text are exported as Markdown blocks/inline markup rather than flattened text.
 - NotebookLM structural wrappers do not flatten headings and tables into adjacent paragraph text.
+- MC3WD-style saved-page KaTeX formulas export as Markdown LaTeX without `unsupported_formula` warnings for supported visual-DOM patterns.
 - `npm test` passes.
 - `npm run build` passes.
 - `html_tset/` remains ignored by Git.
