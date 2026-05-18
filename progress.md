@@ -51,5 +51,17 @@
 - Chrome/Edge headless extension-load：失败于 GPU process；Chrome no-extension baseline 同样失败，说明该 CLI 路径在当前环境不可用。
 
 ## 下一步
-- 写出 1.0 实现计划。
-- 按 TDD 开始实现核心导出模块。
+- 等待 1.1 spec 审阅确认后，按 `docs/plans/2026-05-18-structured-content-selection-export.md` 进入 TDD 实现。
+
+## 2026-05-18
+- 用户反馈 1.0 导出会丢失对话内部换行和结构化内容，需要按 Markdown/富文本结构组织并保留内部换行。
+- 用户要求 popup/window UI 显示对话数量、DOM/历史加载是否完整，并支持默认全部导出或勾选导出。
+- 已重新读取 1.0 spec、matrix、status、实现计划、核心代码、content script、popup 和测试，确认当前缺口：
+  - `visibleText()`、`normalizeInline()` 和 `elementToMarkdown()` 会折叠消息体空白；
+  - popup 只有单个导出按钮和状态文本；
+  - content script 只有 `NOTEBOOKLM_EXPORT_MARKDOWN`，没有 scan/status 合约；
+  - 当前没有 selection/filtering 模型。
+- 已写入 1.1 spec：`docs/specs/01_structured_content_and_selection_export.md`。
+- 已写入 1.1 matrix：`docs/matrix_notebooklm_export_1_1.md`。
+- 已写入 1.1 TDD 实施计划：`docs/plans/2026-05-18-structured-content-selection-export.md`。
+- 当前门禁：按 brainstorming 流程，先请用户审阅 spec；确认后再进入实现代码变更。

@@ -4,7 +4,7 @@
 先完成可评审的功能与技术 spec，对齐后再进入实现；第一阶段实现 NotebookLM conversation 到 Markdown 的导出，PDF 与公式复制/LaTeX 解析作为后续扩展设计。
 
 ## 当前阶段
-阶段 5
+阶段 6
 
 ## 各阶段
 
@@ -41,6 +41,14 @@
 - [x] 完成 1.0 审计并记录当前环境边界
 - **状态：** complete
 
+### 阶段 6：1.1 结构化内容与选择导出设计
+- [x] 梳理 1.0 中消息内部换行和富文本结构丢失的原因
+- [x] 写入 1.1 spec，覆盖结构化 Markdown、popup 状态、计数、全部/勾选导出
+- [x] 写入 1.1 spec-to-implementation matrix
+- [x] 写入 1.1 TDD 实施计划
+- [ ] 等待用户审阅并确认是否按该 spec 进入实现
+- **状态：** in_progress
+
 ## 关键问题
 1. 第一版产品形态是浏览器扩展、用户脚本/书签脚本、还是 CLI/本地网页解析器？已确认：浏览器扩展。
 2. 第一版 Markdown 应覆盖哪些 conversation 内容：问答文本、来源引用、时间/角色、图片/表格、公式？已确认：结构化归档范围，包含标题、问答正文、角色顺序、来源引用、列表/代码块/表格、基础 frontmatter。
@@ -60,6 +68,8 @@
 | 第一版公式处理采用基础 LaTeX 解析与失败回退 | 用户确认选项 B；支持常见 inline/block 公式，不让公式解析失败阻断 Markdown 导出 |
 | NotebookLM 样本从 `html_tset/` 读取且不跟踪进 Git | 用户确认选项 A 并明确要求该目录不纳入 Git |
 | 第一版采用 DOM-first 浏览器扩展方案 | 用户确认方案 1；运行时读取 NotebookLM 页面 DOM，样本 HTML 用作 fixture 和测试依据 |
+| 1.1 选择导出的单位采用单条 normalized message | 与现有数据模型和“几条对话”计数一致；问答对分组可作为后续 UI 增强 |
+| 1.1 popup 先 scan 再 export | 需要展示消息数、source 数和 DOM 完整性；导出时仍重新扫描以避免 stale DOM |
 
 ## 遇到的错误
 | 错误 | 尝试次数 | 解决方案 |
