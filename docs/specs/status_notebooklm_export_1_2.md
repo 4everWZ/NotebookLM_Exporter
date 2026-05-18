@@ -12,6 +12,7 @@ NotebookLM Export 1.2 fixes user-reported export and popup issues:
 - Lazy-load history counts prefer `.individual-message` nodes when present so DOM history count tracks exported message count rather than chat-pair count.
 - Popup DOM status displays the loaded DOM message count from scan results.
 - Formula export now prefers Gemini/Voyager-style source fields, LaTeX annotations, and supported NotebookLM KaTeX visual-DOM inference before falling back to non-empty visible-text warnings.
+- Formula Markdown now isolates display math delimiters on their own lines and spaces inline formulas away from surrounding prose for Typora-style renderers.
 
 ## In Scope
 
@@ -40,6 +41,7 @@ NotebookLM Export 1.2 fixes user-reported export and popup issues:
 - Rich-text wrapper extraction: `src/extension/core.js`.
 - Summary extraction, user prompt heading handling, Markdown section rendering, and history counting: `src/extension/core.js`.
 - Formula source extraction and supported KaTeX visual-DOM inference: `src/extension/core.js`.
+- Typora-safe formula block boundaries, inline formula spacing, and unsupported visual inference fallback: `src/extension/core.js`.
 - Regression tests: `tests/dom-adapter.test.js`, `tests/renderer.test.js`, `tests/lazy-loader.test.js`.
 - Formula regression tests: `tests/formula.test.js`.
 - Version metadata: `manifest.json` and `package.json` are `1.2.0`.
@@ -72,7 +74,11 @@ NotebookLM Export 1.2 fixes user-reported export and popup issues:
 - MC3WD formula saved HTML smoke:
   - `messageCount=28`
   - `formulaWarningCount=0`
-  - `mathDelimiterCount=942`
+  - `warningCount=0`
+  - `unsafeDisplayLineCount=0`
+  - `formulaCount=451`
+  - KaTeX validation parsed `451/451` exported formulas with `errorCount=0`
+  - local preview `html_tset/mc3wd-after-preview.html` had `displayMathCount=20`, `inlineMathCount=431`, and `errorsCount=0`
   - sample formulas included `$GB_i$`, `$$ p_k(GB_i)=\frac{...}{...} $$`, and `$$ H(GB_i)=-\sum_{k=1}^C... $$`
 
 ## Known Boundaries

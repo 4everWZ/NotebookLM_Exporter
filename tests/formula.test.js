@@ -52,7 +52,7 @@ test("extracts block LaTeX from display math", () => {
     warnings,
   );
 
-  assert.equal(markdown, "$$\n\\sum_i x_i\n$$");
+  assert.equal(markdown, "\n\n$$\n\\sum_i x_i\n$$\n\n");
   assert.deepEqual(warnings, []);
 });
 
@@ -192,7 +192,7 @@ test("infers NotebookLM KaTeX fractions and superscripts from visual DOM", () =>
     warnings,
   );
 
-  assert.equal(markdown, "$$\n\\frac{x^2}{n}\n$$");
+  assert.equal(markdown, "\n\n$$\n\\frac{x^2}{n}\n$$\n\n");
   assert.deepEqual(warnings, []);
 });
 
@@ -241,4 +241,65 @@ test("keeps inferred LaTeX commands separated from following identifiers", () =>
 
   assert.equal(markdown, "$x\\in GB\\to 0$");
   assert.deepEqual(warnings, []);
+});
+
+test("maps visual-only mathematical symbols to KaTeX-parseable commands", () => {
+  const warnings = [];
+  const markdown = extractFormulaMarkdown(
+    el("span", { class: "katex" }, [
+      el("span", { class: "katex-html", "aria-hidden": "true" }, [
+        el("span", { class: "base" }, [
+          el("span", { class: "mord mathnormal" }, ["Q"]),
+          el("span", { class: "mrel" }, ["\uE020"]),
+          el("span", { class: "mrel" }, ["="]),
+          el("span", { class: "mord" }, ["∅"]),
+          el("span", { class: "mrel" }, ["⟺"]),
+          el("span", { class: "mord" }, ["∃"]),
+          el("span", { class: "mord mathnormal" }, ["x"]),
+          el("span", { class: "mbin" }, ["∩"]),
+          el("span", { class: "mord mathnormal" }, ["B"]),
+        ]),
+      ]),
+    ]),
+    warnings,
+  );
+
+  assert.equal(markdown, "$Q\\ne \\emptyset \\Longleftrightarrow \\exists x\\cap B$");
+  assert.deepEqual(warnings, []);
+});
+
+test("escapes percent signs in inferred LaTeX formulas", () => {
+  const warnings = [];
+  const markdown = extractFormulaMarkdown(
+    el("span", { class: "katex" }, [
+      el("span", { class: "katex-html", "aria-hidden": "true" }, [
+        el("span", { class: "base" }, [
+          el("span", { class: "mord mathnormal" }, ["q"]),
+          el("span", { class: "mrel" }, ["="]),
+          el("span", { class: "mord" }, ["95%"]),
+        ]),
+      ]),
+    ]),
+    warnings,
+  );
+
+  assert.equal(markdown, "$q=95\\%$");
+  assert.deepEqual(warnings, []);
+});
+
+test("falls back to visible text with warning when visual inference has unsupported symbols", () => {
+  const warnings = [];
+  const markdown = extractFormulaMarkdown(
+    el("span", { class: "katex" }, [
+      el("span", { class: "katex-html", "aria-hidden": "true" }, [
+        el("span", { class: "base" }, [el("span", { class: "mord" }, ["Q\uE123=0"])]),
+      ]),
+    ]),
+    warnings,
+  );
+
+  assert.equal(markdown, "Q\uE123=0");
+  assert.equal(warnings.length, 1);
+  assert.equal(warnings[0].code, "unsupported_formula");
+  assert.match(warnings[0].message, /Q\uE123=0/);
 });

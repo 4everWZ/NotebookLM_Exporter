@@ -288,10 +288,14 @@ The DOM adapter must stop using one global whitespace-collapse path for message 
 - infer common NotebookLM saved-page KaTeX visual DOM when no source field or annotation exists, including simple symbols, subscripts, superscripts, fractions, sum/product limits, named operators, Greek letters, and common mathematical symbols,
 - render display formulas as `$$ ... $$`,
 - render inline formulas as `$...$`,
+- isolate display formula delimiters on their own lines with blank-line boundaries so Typora-style Markdown math renderers do not treat surrounding Markdown as part of the formula,
+- add spacing between inline formulas and adjacent non-formula prose to avoid accidental token merging,
+- map supported visual-only symbols such as KaTeX's private-use not-equal marker, `∅`, `∃`, `∩`, `⟺`, and `%` into KaTeX-parseable LaTeX commands,
+- reject visual-DOM inference when unsupported private-use or TeX-risk characters remain, preserving visible text and warning instead of wrapping uncertain output in `$...$`,
 - ignore empty KaTeX spacing nodes,
 - preserve visible text and warning on unsupported non-empty formula markup.
 
-The structured extraction change must not collapse formula blocks into adjacent prose. The visual-DOM path is intentionally conservative: it aims to recover usable Markdown LaTeX from NotebookLM saved pages, but it is not full Gemini/Voyager formula-copy UI, selectable output-format, or Word/MathML compatibility.
+The structured extraction change must not collapse formula blocks into adjacent prose. The visual-DOM path is intentionally conservative: it aims to recover usable Markdown LaTeX from NotebookLM saved pages, but it is not full Gemini/Voyager formula-copy UI, selectable output-format, or Word/MathML compatibility. If the exporter cannot confidently produce parseable LaTeX, it must keep the visible formula text and emit an export warning.
 
 ## Error Handling
 
@@ -364,6 +368,10 @@ The popup does not parse NotebookLM DOM. It only consumes content-script scan re
   - LaTeX annotation encoding variants,
   - NotebookLM KaTeX visual DOM subscripts,
   - NotebookLM KaTeX visual DOM fractions and superscripts,
+  - Typora-safe display formula boundaries,
+  - spacing between inline formulas and prose,
+  - visual-only symbol mappings for parseable LaTeX,
+  - unsupported visual inference fallback warnings,
   - empty and zero-width-only KaTeX spacing nodes without warnings.
 - Renderer/frontmatter includes:
   - `export_mode`,
@@ -400,6 +408,8 @@ Use the saved NotebookLM HTML under ignored `html_tset/`:
 - confirm extracted message count is non-zero,
 - confirm at least one exported message body contains preserved internal Markdown newlines when fixture content includes them.
 - confirm the MC3WD saved NotebookLM page exports formulas with Markdown LaTeX delimiters and no `unsupported_formula` warnings.
+- confirm every exported MC3WD formula is accepted by a KaTeX parse/render pass.
+- open a local rendered preview of the exported Markdown and confirm no formula render-error nodes appear.
 
 Live authenticated NotebookLM export remains a manual verification path because current automated Playwright context does not have a NotebookLM login session.
 
@@ -418,6 +428,8 @@ Live authenticated NotebookLM export remains a manual verification path because 
 - Paragraphs, lists, code blocks, tables, headings, and basic inline rich text are exported as Markdown blocks/inline markup rather than flattened text.
 - NotebookLM structural wrappers do not flatten headings and tables into adjacent paragraph text.
 - MC3WD-style saved-page KaTeX formulas export as Markdown LaTeX without `unsupported_formula` warnings for supported visual-DOM patterns.
+- Display formulas use standalone delimiter lines and inline formulas have surrounding prose spacing.
+- Exported MC3WD formulas pass a KaTeX render check.
 - `npm test` passes.
 - `npm run build` passes.
 - `html_tset/` remains ignored by Git.

@@ -144,13 +144,16 @@
     const stack = root ? [root] : [];
 
     while (stack.length > 0) {
-      const current = stack.shift();
+      const current = stack.pop();
       if (!current || typeof current.getAttribute !== "function") {
         continue;
       }
 
       results.push(current);
-      stack.unshift(...childNodes(current).filter((child) => child && typeof child.getAttribute === "function"));
+      const children = childNodes(current).filter((child) => child && typeof child.getAttribute === "function");
+      for (let index = children.length - 1; index >= 0; index -= 1) {
+        stack.push(children[index]);
+      }
     }
 
     return results;
@@ -260,14 +263,24 @@
     ["∏", "\\prod"],
     ["∈", "\\in"],
     ["∉", "\\notin"],
+    ["∅", "\\emptyset"],
+    ["∃", "\\exists"],
+    ["∀", "\\forall"],
     ["∞", "\\infty"],
     ["≤", "\\le"],
     ["≥", "\\ge"],
     ["≠", "\\ne"],
     ["≈", "\\approx"],
+    ["∩", "\\cap"],
+    ["∪", "\\cup"],
+    ["⊂", "\\subset"],
+    ["⊆", "\\subseteq"],
+    ["⊃", "\\supset"],
+    ["⊇", "\\supseteq"],
     ["×", "\\times"],
     ["÷", "\\div"],
     ["±", "\\pm"],
+    ["%", "\\%"],
     ["−", "-"],
     ["→", "\\to"],
     ["←", "\\leftarrow"],
@@ -275,6 +288,7 @@
     ["⇒", "\\Rightarrow"],
     ["⇐", "\\Leftarrow"],
     ["⇔", "\\Leftrightarrow"],
+    ["⟺", "\\Longleftrightarrow"],
     ["∣", "|"],
     ["‖", "\\|"],
     ["√", "\\sqrt"],
@@ -285,6 +299,7 @@
     "Rightarrow",
     "Leftarrow",
     "Leftrightarrow",
+    "Longleftrightarrow",
     "leftrightarrow",
     "leftarrow",
     "notin",
@@ -293,6 +308,9 @@
     "gamma",
     "delta",
     "epsilon",
+    "emptyset",
+    "exists",
+    "forall",
     "theta",
     "lambda",
     "mu",
@@ -317,15 +335,29 @@
     "ge",
     "ne",
     "approx",
+    "cap",
+    "cup",
+    "subset",
+    "subseteq",
+    "supset",
+    "supseteq",
     "times",
     "div",
     "pm",
     "to",
     ...NAMED_OPERATORS,
   ];
+  const LATEX_COMMAND_BOUNDARY_PATTERNS = LATEX_COMMANDS_REQUIRING_BOUNDARY.map((command) => ({
+    followedByIdentifier: new RegExp(`\\\\${command}(?=[A-Za-z0-9])`, "g"),
+    followedByCommand: new RegExp(`\\\\${command}(?=\\\\[A-Za-z])`, "g"),
+    replacement: `\\${command} `,
+  }));
 
   function normalizeKatexText(text, element) {
-    const raw = String(text || "").replace(/[\u200B-\u200D\uFEFF]/g, "").trim();
+    const raw = String(text || "")
+      .replace(/[\u200B-\u200D\uFEFF]/g, "")
+      .replace(/\uE020\s*=/g, "\\ne")
+      .trim();
     if (!raw) {
       return "";
     }
@@ -540,19 +572,49 @@
   }
 
   function normalizeInferredKatexLatex(latex) {
-    let normalized = String(latex || "").replace(/[\u200B-\u200D\uFEFF]/g, "").trim();
+    let normalized = String(latex || "")
+      .replace(/[\u200B-\u200D\uFEFF]/g, "")
+      .replace(/\uE020\s*=/g, "\\ne")
+      .trim();
 
-    for (const command of LATEX_COMMANDS_REQUIRING_BOUNDARY) {
-      normalized = normalized.replace(new RegExp(`\\\\${command}(?=[A-Za-z0-9])`, "g"), `\\${command} `);
+    for (const pattern of LATEX_COMMAND_BOUNDARY_PATTERNS) {
+      normalized = normalized
+        .replace(pattern.followedByIdentifier, pattern.replacement)
+        .replace(pattern.followedByCommand, pattern.replacement);
     }
 
     return normalized;
   }
 
-  function getFormulaLatex(element) {
-    return stripFormulaDelimiters(
-      getFormulaAttributeSource(element) || getFormulaAnnotation(element) || inferKatexVisualLatex(element),
-    );
+  function hasUnsupportedInferredLatex(latex) {
+    return /[\uE000-\uF8FF#&]/.test(String(latex || ""));
+  }
+
+  function getFormulaLatexSource(element) {
+    const attributeSource = stripFormulaDelimiters(getFormulaAttributeSource(element));
+    if (attributeSource) {
+      return { latex: attributeSource, source: "attribute" };
+    }
+
+    const annotationSource = stripFormulaDelimiters(getFormulaAnnotation(element));
+    if (annotationSource) {
+      return { latex: annotationSource, source: "annotation" };
+    }
+
+    const inferredSource = stripFormulaDelimiters(inferKatexVisualLatex(element));
+    if (!inferredSource) {
+      return { latex: "", source: "none" };
+    }
+
+    if (hasUnsupportedInferredLatex(inferredSource)) {
+      return { latex: "", source: "visual", rejected: true };
+    }
+
+    return { latex: inferredSource, source: "visual" };
+  }
+
+  function formatFormulaMarkdown(latex, display) {
+    return display ? `\n\n$$\n${latex}\n$$\n\n` : `$${latex}$`;
   }
 
   function isDisplayFormula(element) {
@@ -574,10 +636,11 @@
   }
 
   function extractFormulaMarkdown(element, warnings) {
-    const latex = getFormulaLatex(element);
+    const formulaSource = getFormulaLatexSource(element);
+    const latex = formulaSource.latex;
 
     if (latex) {
-      return isDisplayFormula(element) ? `$$\n${latex}\n$$` : `$${latex}$`;
+      return formatFormulaMarkdown(latex, isDisplayFormula(element));
     }
 
     const visibleText = String((element && element.textContent) || "")
@@ -845,7 +908,8 @@
     }
 
     if (matchesAny(node, [".katex", ".katex-display"]) || getTagName(node) === "math") {
-      return extractFormulaMarkdown(node, context.warnings);
+      const markdown = extractFormulaMarkdown(node, context.warnings);
+      return markdown.startsWith("$") ? ` ${markdown} ` : markdown;
     }
 
     const tagName = getTagName(node);

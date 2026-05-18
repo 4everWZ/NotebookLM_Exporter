@@ -13,6 +13,7 @@ Browser extension for exporting NotebookLM conversations to structured Markdown.
 - Preserves structured turns, internal message line breaks, sources, citations, paragraphs, headings, lists, code blocks, tables, links, emphasis, inline code, and formulas.
 - Keeps user prompt text as message body text even when NotebookLM marks the prompt wrapper with heading roles or heading classes.
 - Uses Gemini/Voyager-style formula source fields, LaTeX annotations, and conservative NotebookLM KaTeX visual-DOM inference before falling back to visible text warnings.
+- Emits Typora-friendly Markdown math: display formulas are isolated on their own `$$` lines, and inline formulas are spaced away from surrounding prose.
 
 PDF export and full Gemini/Voyager formula-copy UI/MathML format compatibility are future work.
 

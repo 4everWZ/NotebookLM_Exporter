@@ -339,3 +339,74 @@ test("keeps NotebookLM structural wrappers from flattening headings and tables",
     ].join("\n"),
   );
 });
+
+test("separates display formulas from surrounding paragraph text for Markdown math renderers", () => {
+  const fixture = doc({
+    title: "Display Formula Boundary Test - NotebookLM",
+    children: [
+      el("div", { class: "chat-panel-content" }, [
+        el("div", { class: "chat-message-pair" }, [
+          el("mat-card", { class: "to-user-message-card-content" }, [
+            el("mat-card-content", { class: "message-content to-user-message-inner-content" }, [
+              el("p", {}, [
+                "概率定义：",
+                el("span", { class: "katex katex-display" }, [
+                  el("annotation", { encoding: "application/x-tex" }, ["p_i=\\frac{1}{C}"]),
+                ]),
+                "其中，",
+                el("span", { class: "katex" }, [
+                  el("annotation", { encoding: "application/x-tex" }, ["C"]),
+                ]),
+                "是类别数。",
+              ]),
+            ]),
+          ]),
+        ]),
+      ]),
+    ],
+  });
+
+  const data = extractNotebookData(fixture, {
+    exportedAt: "2026-05-18T10:00:00.000Z",
+    historyLoadStatus: "complete",
+  });
+
+  assert.equal(
+    data.messages[0].markdown,
+    ["概率定义：", "", "$$", "p_i=\\frac{1}{C}", "$$", "", "其中， $C$ 是类别数。"].join("\n"),
+  );
+});
+
+test("adds spacing around inline formulas when adjacent to prose", () => {
+  const fixture = doc({
+    title: "Inline Formula Spacing Test - NotebookLM",
+    children: [
+      el("div", { class: "chat-panel-content" }, [
+        el("div", { class: "chat-message-pair" }, [
+          el("mat-card", { class: "to-user-message-card-content" }, [
+            el("mat-card-content", { class: "message-content to-user-message-inner-content" }, [
+              el("p", {}, [
+                "样本",
+                el("span", { class: "katex" }, [
+                  el("annotation", { encoding: "application/x-tex" }, ["x_i"]),
+                ]),
+                "对应分布",
+                el("span", { class: "katex" }, [
+                  el("annotation", { encoding: "application/x-tex" }, ["p_i"]),
+                ]),
+                "。",
+              ]),
+            ]),
+          ]),
+        ]),
+      ]),
+    ],
+  });
+
+  const data = extractNotebookData(fixture, {
+    exportedAt: "2026-05-18T10:00:00.000Z",
+    historyLoadStatus: "complete",
+  });
+
+  assert.equal(data.messages[0].markdown, "样本 $x_i$ 对应分布 $p_i$ 。");
+});
