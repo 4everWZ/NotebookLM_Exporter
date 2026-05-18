@@ -1,8 +1,8 @@
-# NotebookLM Export 1.1 Structured Content and Selection Spec
+# NotebookLM Export 1.2 Structured Content and Selection Spec
 
 ## Purpose
 
-Improve the Markdown export so a NotebookLM conversation is exported as structured Markdown rather than flattened visible text. Version 1.1 also makes the popup show conversation scan status, loaded-history completeness, message count, and an export mode control for all messages or checked messages. The default export mode is all messages.
+Improve the Markdown export so a NotebookLM conversation is exported as structured Markdown rather than flattened visible text. Version 1.2 keeps the popup status fields from 1.1, makes scan explicitly user-triggered, and fixes NotebookLM structural wrappers that can otherwise flatten headings and tables. The default export mode is all messages.
 
 This is a Tier B behavior change. It changes user-visible export output, popup behavior, and content-script message contracts, but it does not introduce private NotebookLM API usage or PDF export.
 
@@ -12,6 +12,7 @@ This is a Tier B behavior change. It changes user-visible export output, popup b
 - Keep Markdown deterministic for the same normalized conversation model.
 - Show the user how many conversation messages are currently detected.
 - Show whether the lazy-loaded DOM history is confirmed complete.
+- Start scan only after the user clicks Scan.
 - Let the user export all messages or only checked messages.
 - Keep all as the default export mode.
 - Keep NotebookLM selector details inside the DOM adapter and lazy loader.
@@ -30,20 +31,21 @@ This is a Tier B behavior change. It changes user-visible export output, popup b
 
 1. User opens a NotebookLM notebook tab.
 2. User opens the extension popup.
-3. Popup starts a scan of the active NotebookLM tab.
-4. Content script loads lazy conversation history using the existing loader policy.
-5. Content script extracts a normalized conversation model.
-6. Popup shows:
+3. Popup does not scan automatically.
+4. User clicks Scan.
+5. Content script loads lazy conversation history using the existing loader policy.
+6. Content script extracts a normalized conversation model.
+7. Popup shows:
    - detected message count,
    - source count,
    - DOM/history load status,
    - export mode control: all or selected,
    - a checklist of detected messages for selected export mode.
-7. Export mode defaults to all.
-8. If selected mode is chosen, the export button is disabled until at least one message is checked.
-9. Export blocks when history completeness is not confirmed as `complete`.
-10. Export all writes every normalized message.
-11. Export selected writes only checked messages, preserving their original conversation order.
+8. Export mode defaults to all.
+9. If selected mode is chosen, the export button is disabled until at least one message is checked.
+10. Export blocks when history completeness is not confirmed as `complete`.
+11. Export all writes every normalized message.
+12. Export selected writes only checked messages, preserving their original conversation order.
 
 ## UX Model
 
@@ -53,11 +55,15 @@ The popup remains compact and operational rather than becoming a landing page.
 
 - Header: `NotebookLM Export`
 - Status line:
-  - `Checking active tab...`
+  - `Click Scan to inspect the active NotebookLM tab.`
   - `Loading conversation history...`
   - `History complete`
   - `History incomplete: <reason>`
   - `Export failed: <reason>`
+- Scan button:
+  - `Scan`,
+  - enabled before scan,
+  - disabled while scan/export is running.
 - Count row:
   - `Messages: N`
   - `Sources: N`
@@ -79,6 +85,7 @@ The popup remains compact and operational rather than becoming a landing page.
   - row value stores normalized message id such as `m1`.
 - Primary button:
   - `Export Markdown`,
+  - disabled before a successful scan,
   - disabled while scan/export is running,
   - disabled if active tab is not NotebookLM,
   - disabled if selected mode has zero checked messages,
@@ -232,7 +239,7 @@ Rules:
 - Selected export preserves original message order.
 - `messageCount` in exported frontmatter reflects messages actually exported.
 - `selectedMessageCount` is included for selected exports and equals exported message count.
-- Sources are not filtered in 1.1; all detected sources remain in the Sources section so citation references have context.
+- Sources are not filtered in 1.2; all detected sources remain in the Sources section so citation references have context.
 
 ## Structured Markdown Extraction Rules
 
@@ -244,11 +251,13 @@ The DOM adapter must stop using one global whitespace-collapse path for message 
 - Consecutive text separated by `<br>` keeps line breaks inside the same paragraph.
 - Multiple paragraphs inside one NotebookLM message remain separate paragraphs.
 - `div`, `section`, `mat-card-content`, and unknown containers are treated as block containers when they contain block children.
+- NotebookLM structural wrappers such as `labs-tailwind-doc-viewer`, `element-list-renderer`, `labs-tailwind-structural-element-view-v2`, and `paragraph-element-view` are transparent block containers.
 - `ul` and `ol` become Markdown lists.
 - Nested lists should keep indentation when the source DOM expresses nesting.
 - `pre` becomes a fenced code block and preserves internal newlines exactly after trimming only surrounding blank lines.
 - `table` becomes a Markdown table when rows and cells are parseable.
 - Headings `h1` through `h6` become Markdown headings with matching levels.
+- NotebookLM heading blocks expressed as `role="heading" aria-level="N"` or `.headingN` become Markdown headings.
 - Empty blocks are ignored.
 
 ### Inline Rules
@@ -272,7 +281,7 @@ The DOM adapter must stop using one global whitespace-collapse path for message 
 
 ## Formula Handling
 
-1.1 keeps the 1.0 formula behavior:
+1.2 keeps the 1.0 formula behavior:
 
 - prefer `annotation[encoding="application/x-tex"]`,
 - render display formulas as `$$ ... $$`,
@@ -306,6 +315,7 @@ Non-blocking warnings:
 Add or expose these responsibilities:
 
 - block-aware DOM-to-Markdown conversion,
+- transparent block handling for NotebookLM structural wrappers,
 - `createMessagePreview(markdown)`,
 - `createConversationStatus(exportData, history)`,
 - `filterExportData(exportData, options)`.
@@ -327,7 +337,7 @@ The content script may rescan during export instead of trusting stale popup data
 
 Add:
 
-- scan on popup load,
+- manual scan through a Scan button,
 - status/count/load-state fields,
 - all/checked radio group,
 - message checklist,
@@ -360,6 +370,8 @@ The popup does not parse NotebookLM DOM. It only consumes content-script scan re
   - reports incomplete history status without claiming completeness.
 - Popup contract:
   - static verifier checks required popup element IDs,
+  - static verifier checks the Scan button exists,
+  - static verifier rejects automatic scan invocation on popup load,
   - no production code relies on missing IDs.
 
 ### Local Verification Commands
@@ -384,6 +396,8 @@ Live authenticated NotebookLM export remains a manual verification path because 
 ## Acceptance Criteria
 
 - Popup shows detected message count and source count after scan.
+- Popup does not scan automatically on open.
+- Popup starts scan only after the Scan button is clicked.
 - Popup shows DOM/history load completeness status.
 - Popup defaults to all export mode.
 - Popup supports checked-message export mode.
@@ -392,21 +406,21 @@ Live authenticated NotebookLM export remains a manual verification path because 
 - Export blocks visibly when history completeness is not confirmed.
 - Message internal line breaks are preserved in Markdown source.
 - Paragraphs, lists, code blocks, tables, headings, and basic inline rich text are exported as Markdown blocks/inline markup rather than flattened text.
+- NotebookLM structural wrappers do not flatten headings and tables into adjacent paragraph text.
 - `npm test` passes.
 - `npm run build` passes.
 - `html_tset/` remains ignored by Git.
 
 ## Design Alternatives Considered
 
-### Recommended: Scan-Then-Export Through Content Script
+### Recommended: Manual Scan-Then-Export Through Content Script
 
-The popup asks the content script to scan, displays scan results, then sends export options. Export rescans to avoid stale DOM assumptions. This is slightly more work but keeps popup simple and avoids private NotebookLM APIs.
+The popup waits for the user to click Scan, asks the content script to scan, displays scan results, then sends export options. Export rescans to avoid stale DOM assumptions. This keeps popup behavior explicit and avoids automatically triggering lazy-history loading when the user only opens the extension popup.
 
 ### Alternative: Export UI Injected Into NotebookLM Page
 
-An in-page panel could have more space for long checklists. It would also be more invasive, more likely to conflict with NotebookLM CSS, and harder to keep visually restrained. This is not chosen for 1.1.
+An in-page panel could have more space for long checklists. It would also be more invasive, more likely to conflict with NotebookLM CSS, and harder to keep visually restrained. This is not chosen for 1.2.
 
 ### Alternative: Only Add Partial Export Without Checklist
 
 The popup could provide only all/current-visible export. This would not satisfy the requirement to choose all or checked messages and would keep the lazy-load completeness ambiguity hidden. This is not chosen.
-

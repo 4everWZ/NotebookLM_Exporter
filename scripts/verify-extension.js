@@ -76,6 +76,7 @@ for (const requiredFile of [
 const popupHtml = readText("src/extension/popup.html");
 for (const requiredId of [
   "status",
+  "scan-conversation",
   "message-count",
   "source-count",
   "history-status",
@@ -94,6 +95,14 @@ for (const requiredMessageType of ["NOTEBOOKLM_SCAN_CONVERSATION", "NOTEBOOKLM_E
   if (!contentScript.includes(requiredMessageType)) {
     fail(`content-script.js must include ${requiredMessageType}`);
   }
+}
+
+const popupJs = readText("src/extension/popup.js");
+if (popupJs.includes("scanActiveTab();")) {
+  fail("popup.js must not auto-scan on load; scan must be triggered by #scan-conversation");
+}
+if (!popupJs.includes('document.getElementById("scan-conversation")')) {
+  fail("popup.js must bind #scan-conversation");
 }
 
 if (process.exitCode) {

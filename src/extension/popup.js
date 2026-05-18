@@ -10,6 +10,7 @@ const elements = {
   messageList: document.getElementById("message-list"),
   modeAll: document.getElementById("mode-all"),
   modeSelected: document.getElementById("mode-selected"),
+  scanButton: document.getElementById("scan-conversation"),
   sourceCount: document.getElementById("source-count"),
   status: document.getElementById("status"),
 };
@@ -72,6 +73,7 @@ function updateControls() {
   });
 
   elements.button.disabled = !canExport();
+  elements.scanButton.disabled = state.scanning || state.exporting;
 }
 
 function renderMessages(messages) {
@@ -202,6 +204,6 @@ async function exportMarkdown() {
 
 elements.modeAll.addEventListener("change", updateControls);
 elements.modeSelected.addEventListener("change", updateControls);
+elements.scanButton.addEventListener("click", scanActiveTab);
 elements.button.addEventListener("click", exportMarkdown);
-
-scanActiveTab();
+updateControls();

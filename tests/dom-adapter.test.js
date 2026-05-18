@@ -167,3 +167,78 @@ test("keeps nested list indentation when exporting Markdown", () => {
 
   assert.equal(data.messages[0].markdown, "- Parent\n  - Child");
 });
+
+test("keeps NotebookLM structural wrappers from flattening headings and tables", () => {
+  const fixture = doc({
+    title: "UAV Wrapper Test - NotebookLM",
+    children: [
+      el("div", { class: "chat-panel-content" }, [
+        el("div", { class: "chat-message-pair" }, [
+          el("mat-card", { class: "to-user-message-card-content" }, [
+            el("mat-card-content", { class: "message-content to-user-message-inner-content" }, [
+              el("div", { class: "message-text-content" }, [
+                el("labs-tailwind-doc-viewer", {}, [
+                  el("element-list-renderer", {}, [
+                    el("labs-tailwind-structural-element-view-v2", {}, [
+                      el("paragraph-element-view", {}, [
+                        el("div", { class: "paragraph normal" }, ["Intro paragraph."]),
+                      ]),
+                    ]),
+                    el("labs-tailwind-structural-element-view-v2", {}, [
+                      el("paragraph-element-view", {}, [
+                        el("div", { class: "paragraph heading3", role: "heading", "aria-level": "3" }, [
+                          "一、 核心要素对比分析表",
+                        ]),
+                      ]),
+                    ]),
+                    el("labs-tailwind-structural-element-view-v2", {}, [
+                      el("table", {}, [
+                        el("tbody", {}, [
+                          el("tr", {}, [
+                            el("th", {}, [el("div", { class: "paragraph table-paragraph" }, ["比较维度"])]),
+                            el("th", {}, [el("div", { class: "paragraph table-paragraph" }, ["AirCopBench"])]),
+                          ]),
+                          el("tr", {}, [
+                            el("td", {}, [el("div", { class: "paragraph table-paragraph" }, ["核心主题"])]),
+                            el("td", {}, [el("div", { class: "paragraph table-paragraph" }, ["多无人机协同"])]),
+                          ]),
+                        ]),
+                      ]),
+                    ]),
+                    el("labs-tailwind-structural-element-view-v2", {}, [
+                      el("paragraph-element-view", {}, [
+                        el("div", { class: "paragraph heading3", role: "heading", "aria-level": "3" }, [
+                          "二、 详细异同分析",
+                        ]),
+                      ]),
+                    ]),
+                  ]),
+                ]),
+              ]),
+            ]),
+          ]),
+        ]),
+      ]),
+    ],
+  });
+
+  const data = extractNotebookData(fixture, {
+    exportedAt: "2026-05-18T10:00:00.000Z",
+    historyLoadStatus: "complete",
+  });
+
+  assert.equal(
+    data.messages[0].markdown,
+    [
+      "Intro paragraph.",
+      "",
+      "### 一、 核心要素对比分析表",
+      "",
+      "| 比较维度 | AirCopBench |",
+      "| --- | --- |",
+      "| 核心主题 | 多无人机协同 |",
+      "",
+      "### 二、 详细异同分析",
+    ].join("\n"),
+  );
+});

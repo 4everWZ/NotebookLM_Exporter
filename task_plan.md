@@ -4,7 +4,7 @@
 先完成可评审的功能与技术 spec，对齐后再进入实现；第一阶段实现 NotebookLM conversation 到 Markdown 的导出，PDF 与公式复制/LaTeX 解析作为后续扩展设计。
 
 ## 当前阶段
-阶段 6 complete
+阶段 7 complete
 
 ## 各阶段
 
@@ -49,6 +49,16 @@
 - [x] 按 TDD 实现结构化 Markdown 抽取、scan 状态和全部/勾选导出
 - [x] 同步 README、matrix、status 和进度文档
 - [x] 完成本地测试、build 和保存 HTML smoke 验证
+- **状态：** complete
+
+### 阶段 7：1.2 手动 Scan 与 UAV 富文本错位修复
+- [x] 复现 `html_tset` UAV 导出中 heading/table 被压平成行内管道文本的问题
+- [x] 确认根因是 NotebookLM 自定义结构 wrapper 未被当作 block container
+- [x] 用 RED 测试覆盖 NotebookLM structural wrappers 下的 heading/table 导出
+- [x] 用 static verifier RED 覆盖 popup 不应自动 scan、必须有 Scan 按钮
+- [x] 实现透明 block wrapper、NotebookLM heading 识别和 popup 手动 Scan
+- [x] 同步 1.2 spec、matrix、status、README 和版本号
+- [x] 完成 popup manual-scan smoke、完整验证和提交
 - **状态：** complete
 
 ## 关键问题

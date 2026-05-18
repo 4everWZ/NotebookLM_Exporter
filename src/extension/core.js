@@ -191,9 +191,14 @@
   const BLOCK_TAGS = new Set([
     "blockquote",
     "div",
+    "element-list-renderer",
+    "hr",
+    "labs-tailwind-doc-viewer",
+    "labs-tailwind-structural-element-view-v2",
     "mat-card-content",
     "ol",
     "p",
+    "paragraph-element-view",
     "pre",
     "section",
     "table",
@@ -220,9 +225,27 @@
     return /^h[1-6]$/.test(tagName);
   }
 
+  function getHeadingLevel(element) {
+    const tagName = getTagName(element);
+
+    if (isHeadingTag(tagName)) {
+      return Number(tagName.slice(1));
+    }
+
+    const role = element && element.getAttribute && element.getAttribute("role");
+    const ariaLevel = element && element.getAttribute && Number(element.getAttribute("aria-level"));
+    if (role === "heading" && Number.isInteger(ariaLevel) && ariaLevel >= 1 && ariaLevel <= 6) {
+      return ariaLevel;
+    }
+
+    const className = String((element && element.getAttribute && element.getAttribute("class")) || element?.className || "");
+    const classLevel = className.match(/\bheading([1-6])\b/);
+    return classLevel ? Number(classLevel[1]) : 0;
+  }
+
   function isBlockElement(element) {
     const tagName = getTagName(element);
-    return BLOCK_TAGS.has(tagName) || isHeadingTag(tagName);
+    return BLOCK_TAGS.has(tagName) || getHeadingLevel(element) > 0;
   }
 
   function hasBlockChildren(element) {
@@ -290,9 +313,22 @@
     return [header, separator, ...body].join("\n");
   }
 
+  function listItemChildren(element) {
+    const items = [];
+
+    for (const child of Array.from((element && element.children) || [])) {
+      if (getTagName(child) === "li") {
+        items.push(child);
+      } else if (["labs-tailwind-structural-element-view-v2", "paragraph-element-view"].includes(getTagName(child))) {
+        items.push(...listItemChildren(child));
+      }
+    }
+
+    return items;
+  }
+
   function renderList(element, context, depth = 0) {
-    return Array.from(element.children || [])
-      .filter((child) => getTagName(child) === "li")
+    return listItemChildren(element)
       .map((child, index) => {
         const marker = getTagName(element) === "ol" ? `${index + 1}.` : "-";
         const directParts = [];
@@ -368,10 +404,10 @@
       return `\`${String(node.textContent || "").trim()}\``;
     }
 
-    if (isHeadingTag(tagName)) {
-      const level = Number(tagName.slice(1));
+    const headingLevel = getHeadingLevel(node);
+    if (headingLevel) {
       const text = normalizeInline(renderInlineChildren(node, context));
-      return text ? `${"#".repeat(level)} ${text}` : "";
+      return text ? `${"#".repeat(headingLevel)} ${text}` : "";
     }
 
     if (tagName === "strong" || tagName === "b") {
@@ -403,9 +439,14 @@
 
   function renderBlockElement(element, context) {
     const tagName = getTagName(element);
+    const headingLevel = getHeadingLevel(element);
 
-    if (isHeadingTag(tagName) || ["ul", "ol", "pre", "table"].includes(tagName)) {
+    if (headingLevel || ["ul", "ol", "pre", "table"].includes(tagName)) {
       return nodeToMarkdown(element, context).trim();
+    }
+
+    if (tagName === "hr") {
+      return "---";
     }
 
     if (tagName === "p") {

@@ -107,6 +107,13 @@ button {
   font-weight: 650;
 }
 
+.secondary-button {
+  min-height: 34px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #0f172a;
+}
+
 button:disabled {
   cursor: progress;
   opacity: 0.65;

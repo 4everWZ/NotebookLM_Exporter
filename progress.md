@@ -75,3 +75,21 @@
 - 保存 HTML smoke：`messageCount=28`、`sourceCount=28`、`warningCount=271`、`hasExportMode=true`、`hasSelectedCount=true`、首个保留内部换行的消息为 `m2`。
 - popup smoke：stub `chrome.tabs` 后确认 scan 显示 `Messages: 2`、`Sources: 1`、`DOM: complete`；默认 `All`；切到 `Checked` 未勾选时禁用导出；勾选 `m2` 后导出 payload 为 `{ mode: "selected", selectedMessageIds: ["m2"] }`。
 - 当前边界：live authenticated NotebookLM popup/export 没有自动化验证；仍需用户在有登录态的浏览器中手动加载扩展验证。
+
+## 2026-05-18 1.2 修复
+- 用户反馈 popup 不应打开后自动 scan，而应点击 Scan 才开始 scan。
+- 用户反馈 `html_tset` 下 UAV 样本导出的富文本错位；截图显示 NotebookLM 原页是表格，但导出的 Markdown 被渲染成行内管道文本。
+- 已检查 `html_tset/UAV-Embodied-Bench-2026-05-18-11-36-47.md`，确认第 19 行把“核心要素对比分析表”和 table header 黏成 `...分析表| 比较维度 | ...`。
+- 已用保存 HTML DOM 取证：第一条 assistant 消息中真实存在 `<table>`，但外层是 `labs-tailwind-doc-viewer > element-list-renderer > labs-tailwind-structural-element-view-v2 > paragraph-element-view`；当前 adapter 没把这些 wrapper 当 block container。
+- 已按 TDD 新增 RED：`tests/dom-adapter.test.js` 覆盖 NotebookLM structural wrappers 下 heading/table 不应被压平。
+- 已按 TDD 新增 verifier RED：`scripts/verify-extension.js` 要求 `#scan-conversation`，并拒绝 popup load 自动调用 `scanActiveTab();`。
+- 已实现 `core.js` 透明 block wrapper、`role="heading"`/`.headingN` heading 识别、wrapped list item 识别。
+- 已实现 popup `Scan` 按钮触发，移除打开 popup 自动 scan。
+- 已同步 `manifest.json` 和 `package.json` 到 `1.2.0`。
+- 已同步 README、active spec、1.2 matrix、1.2 status 和 task_plan。
+- `node --test tests/dom-adapter.test.js`：5/5 tests passed。
+- `npm test`：22/22 tests passed。
+- `npm run build`：Extension verification passed。
+- UAV 保存 HTML smoke：`messageCount=6`、`sourceCount=4`、`warningCount=0`、`hasHeadingBeforeTable=true`、`hasMarkdownTable=true`、`noFlattenedHeadingPipe=true`、`containsSecondHeading=true`。
+- popup manual-scan smoke：打开 popup 后 sent messages 为 `[]`、状态为 `Click Scan to inspect the active NotebookLM tab.`、导出按钮禁用；点击 Scan 后发送 `NOTEBOOKLM_SCAN_CONVERSATION` 并显示 `Messages: 2`、`Sources: 1`、`DOM: complete`；切到 Checked 后空选禁用，勾选 `m2` 后导出 payload 为 `{ mode: "selected", selectedMessageIds: ["m2"] }`。
+- 最终验证：`npm test` 在 `1.2.0` 下 22/22 tests passed；`npm run build` 在 `1.2.0` 下 Extension verification passed；`git diff --check` 无 whitespace error。
