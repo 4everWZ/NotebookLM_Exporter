@@ -1,3 +1,6 @@
 html_tset/
 .playwright-mcp/
 .tmp-chrome-profile*/
+findings.md
+progress.md
+task_plan.md
