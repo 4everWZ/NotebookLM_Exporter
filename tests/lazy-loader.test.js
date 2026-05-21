@@ -1,7 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const { loadFullHistory } = require("../src/extension/core.js");
+const { expandCitationOverflowControls, loadFullHistory } = require("../src/extension/core.js");
 const { doc, el } = require("./helpers/fake-dom.js");
 
 function pair(text) {
@@ -102,4 +102,131 @@ test("does not complete while a loading indicator is still visible", async () =>
 
   assert.equal(result.status, "timeout");
   assert.equal(result.messageCount, 1);
+});
+
+test("expands NotebookLM citation overflow controls with bounded clicks", async () => {
+  const overflowButton = el("button", { class: "citation-marker" }, [
+    el("mat-icon", { "aria-label": "显示其他引用" }, ["more_horiz"]),
+  ]);
+  let clicks = 0;
+  overflowButton.click = () => {
+    clicks += 1;
+    overflowButton.textContent = "2";
+  };
+  const documentRef = doc({
+    children: [
+      el("div", { class: "chat-panel-content" }, [
+        pair("message"),
+        el("p", {}, ["Claim", el("span", { class: "citation-marker" }, ["1"]), overflowButton]),
+      ]),
+    ],
+  });
+
+  const result = await expandCitationOverflowControls(documentRef, {
+    maxAttempts: 3,
+    maxClicks: 5,
+    wait: async () => {},
+  });
+
+  assert.equal(clicks, 1);
+  assert.equal(result.clicks, 1);
+  assert.equal(result.remainingCount, 0);
+});
+
+test("does not repeatedly click a citation overflow control that cannot expand", async () => {
+  const overflowButton = el("button", { class: "citation-marker" }, [
+    el("mat-icon", { "aria-label": "显示其他引用" }, ["more_horiz"]),
+  ]);
+  let clicks = 0;
+  overflowButton.click = () => {
+    clicks += 1;
+  };
+  const documentRef = doc({
+    children: [
+      el("div", { class: "chat-panel-content" }, [
+        pair("message"),
+        el("p", {}, ["Claim", overflowButton]),
+      ]),
+    ],
+  });
+
+  const result = await expandCitationOverflowControls(documentRef, {
+    maxAttempts: 4,
+    maxClicks: 5,
+    wait: async () => {},
+  });
+
+  assert.equal(clicks, 1);
+  assert.equal(result.clicks, 1);
+  assert.equal(result.remainingCount, 1);
+});
+
+test("continues citation overflow expansion when a stale control click fails", async () => {
+  const staleButton = el("button", { class: "citation-marker" }, [
+    el("mat-icon", { "aria-label": "显示其他引用" }, ["more_horiz"]),
+  ]);
+  staleButton.click = () => {
+    throw new Error("detached");
+  };
+  const expandingButton = el("button", { class: "citation-marker" }, [
+    el("mat-icon", { "aria-label": "显示其他引用" }, ["more_horiz"]),
+  ]);
+  let clicks = 0;
+  expandingButton.click = () => {
+    clicks += 1;
+    expandingButton.textContent = "3";
+  };
+  const documentRef = doc({
+    children: [
+      el("div", { class: "chat-panel-content" }, [
+        pair("message"),
+        el("p", {}, ["Claim", staleButton, expandingButton]),
+      ]),
+    ],
+  });
+
+  const result = await expandCitationOverflowControls(documentRef, {
+    maxAttempts: 2,
+    maxClicks: 5,
+    wait: async () => {},
+  });
+
+  assert.equal(clicks, 1);
+  assert.equal(result.clicks, 1);
+  assert.equal(result.remainingCount, 1);
+});
+
+test("loads full history before expanding citation overflow controls", async () => {
+  const scroller = el("div", { class: "chat-panel-content", scrollTop: 100 }, [pair("newer")]);
+  const documentRef = doc({ children: [scroller] });
+  let waits = 0;
+  let clicks = 0;
+
+  const result = await loadFullHistory(documentRef, {
+    stableChecks: 1,
+    maxAttempts: 5,
+    wait: async () => {
+      waits += 1;
+      if (waits === 1) {
+        const overflowButton = el("button", { class: "citation-marker" }, [
+          el("mat-icon", { "aria-label": "显示其他引用" }, ["more_horiz"]),
+        ]);
+        overflowButton.click = () => {
+          clicks += 1;
+          overflowButton.textContent = "2";
+        };
+        append(scroller, pair("older"));
+        append(scroller, overflowButton);
+      }
+    },
+  });
+
+  assert.equal(result.status, "complete");
+  assert.equal(result.messageCount, 2);
+  assert.equal(clicks, 1);
+  assert.deepEqual(result.citationOverflow, {
+    attempts: 1,
+    clicks: 1,
+    remainingCount: 0,
+  });
 });

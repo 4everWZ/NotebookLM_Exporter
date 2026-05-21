@@ -80,6 +80,32 @@ test("extracts LaTeX from Gemini-style data-math attributes", () => {
   assert.deepEqual(warnings, []);
 });
 
+test("normalizes mathbbm indicator macros to KaTeX-compatible mathbb", () => {
+  const warnings = [];
+  const markdown = extractFormulaMarkdown(
+    el("span", { class: "math-inline", "data-math": "\\mathbbm{1}(x > 0)" }, ["1(x > 0)"]),
+    warnings,
+  );
+
+  assert.equal(markdown, "$\\mathbb{1}(x > 0)$");
+  assert.deepEqual(warnings, []);
+});
+
+test("keeps visual left arrow commands intact when adding LaTeX boundaries", () => {
+  const warnings = [];
+  const markdown = extractFormulaMarkdown(
+    el("span", { class: "katex" }, [
+      el("span", { class: "katex-html", "aria-hidden": "true" }, [
+        el("span", { class: "base" }, [el("span", { class: "mrel" }, ["←"])]),
+      ]),
+    ]),
+    warnings,
+  );
+
+  assert.equal(markdown, "$\\leftarrow$");
+  assert.deepEqual(warnings, []);
+});
+
 test("extracts LaTeX from annotation encoding variants", () => {
   const warnings = [];
   const markdown = extractFormulaMarkdown(
@@ -95,6 +121,151 @@ test("extracts LaTeX from annotation encoding variants", () => {
   );
 
   assert.equal(markdown, "$\\alpha_i$");
+  assert.deepEqual(warnings, []);
+});
+
+test("infers visual accent hats as LaTeX accent commands", () => {
+  const warnings = [];
+  const markdown = extractFormulaMarkdown(
+    el("span", { class: "katex" }, [
+      el("span", { class: "katex-html", "aria-hidden": "true" }, [
+        el("span", { class: "base" }, [
+          el("span", { class: "mord accent" }, [
+            el("span", { class: "vlist-t" }, [
+              el("span", { class: "vlist-r" }, [
+                el("span", { class: "vlist" }, [
+                  el("span", { style: "top: -3em;" }, [
+                    el("span", { class: "pstrut" }, []),
+                    el("span", { class: "mord mathnormal" }, ["u"]),
+                  ]),
+                  el("span", { style: "top: -3em;" }, [
+                    el("span", { class: "pstrut" }, []),
+                    el("span", { class: "accent-body" }, [el("span", { class: "mord" }, ["^"])]),
+                  ]),
+                ]),
+              ]),
+            ]),
+          ]),
+        ]),
+      ]),
+    ]),
+    warnings,
+  );
+
+  assert.equal(markdown, "$\\hat{u}$");
+  assert.deepEqual(warnings, []);
+});
+
+test("keeps scripts attached to visual accent bases", () => {
+  const warnings = [];
+  const markdown = extractFormulaMarkdown(
+    el("span", { class: "katex" }, [
+      el("span", { class: "katex-html", "aria-hidden": "true" }, [
+        el("span", { class: "base" }, [
+          el("span", { class: "mord" }, [
+            el("span", { class: "mord accent" }, [
+              el("span", { class: "vlist-t" }, [
+                el("span", { class: "vlist-r" }, [
+                  el("span", { class: "vlist" }, [
+                    el("span", { style: "top: -3em;" }, [
+                      el("span", { class: "pstrut" }, []),
+                      el("span", { class: "mord mathnormal" }, ["z"]),
+                    ]),
+                    el("span", { style: "top: -3em;" }, [
+                      el("span", { class: "pstrut" }, []),
+                      el("span", { class: "accent-body" }, [el("span", { class: "mord" }, ["^"])]),
+                    ]),
+                  ]),
+                ]),
+              ]),
+            ]),
+            el("span", { class: "msupsub" }, [
+              el("span", { class: "vlist-t vlist-t2" }, [
+                el("span", { class: "vlist-r" }, [
+                  el("span", { class: "vlist" }, [
+                    el("span", { style: "top: -2.4em;" }, [
+                      el("span", { class: "pstrut" }, []),
+                      el("span", { class: "sizing" }, [el("span", { class: "mord mathnormal" }, ["h"])]),
+                    ]),
+                    el("span", { style: "top: -3.2em;" }, [
+                      el("span", { class: "pstrut" }, []),
+                      el("span", { class: "sizing" }, [el("span", { class: "mord" }, ["K"])]),
+                    ]),
+                  ]),
+                ]),
+              ]),
+            ]),
+          ]),
+        ]),
+      ]),
+    ]),
+    warnings,
+  );
+
+  assert.equal(markdown, "$\\hat{z}_h^K$");
+  assert.deepEqual(warnings, []);
+});
+
+test("infers visual cases tables as parseable cases environments", () => {
+  const warnings = [];
+  const markdown = extractFormulaMarkdown(
+    el("span", { class: "katex katex-display" }, [
+      el("span", { class: "katex-html", "aria-hidden": "true" }, [
+        el("span", { class: "base" }, [
+          el("span", { class: "mord mathnormal" }, ["MAL"]),
+          el("span", { class: "mrel" }, ["="]),
+        ]),
+        el("span", { class: "base" }, [
+          el("span", { class: "minner" }, [
+            el("span", { class: "mopen delimcenter" }, [el("span", { class: "delimsizing" }, ["{"])]),
+            el("span", { class: "mord" }, [
+              el("span", { class: "mtable" }, [
+                el("span", { class: "col-align-l" }, [
+                  el("span", { class: "vlist-t vlist-t2" }, [
+                    el("span", { class: "vlist-r" }, [
+                      el("span", { class: "vlist" }, [
+                        el("span", { style: "top: -3.6em;" }, [
+                          el("span", { class: "pstrut" }, []),
+                          el("span", { class: "mord mathnormal" }, ["a"]),
+                        ]),
+                        el("span", { style: "top: -2.2em;" }, [
+                          el("span", { class: "pstrut" }, []),
+                          el("span", { class: "mord mathnormal" }, ["b"]),
+                        ]),
+                      ]),
+                    ]),
+                  ]),
+                ]),
+                el("span", { class: "col-align-l" }, [
+                  el("span", { class: "vlist-t vlist-t2" }, [
+                    el("span", { class: "vlist-r" }, [
+                      el("span", { class: "vlist" }, [
+                        el("span", { style: "top: -3.6em;" }, [
+                          el("span", { class: "pstrut" }, []),
+                          el("span", { class: "mord mathnormal" }, ["y"]),
+                          el("span", { class: "mrel" }, ["="]),
+                          el("span", { class: "mord" }, ["1"]),
+                        ]),
+                        el("span", { style: "top: -2.2em;" }, [
+                          el("span", { class: "pstrut" }, []),
+                          el("span", { class: "mord mathnormal" }, ["y"]),
+                          el("span", { class: "mrel" }, ["="]),
+                          el("span", { class: "mord" }, ["0"]),
+                        ]),
+                      ]),
+                    ]),
+                  ]),
+                ]),
+              ]),
+            ]),
+          ]),
+        ]),
+      ]),
+    ]),
+    warnings,
+  );
+
+  assert.equal(markdown, "\n\n$$\nMAL=\\begin{cases}a, & y=1\\\\b, & y=0\\end{cases}\n$$\n\n");
   assert.deepEqual(warnings, []);
 });
 

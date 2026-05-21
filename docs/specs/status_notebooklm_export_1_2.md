@@ -14,6 +14,10 @@ NotebookLM Export 1.2 fixes user-reported export and popup issues:
 - Formula export now prefers Gemini/Voyager-style source fields, LaTeX annotations, and supported NotebookLM KaTeX visual-DOM inference before falling back to non-empty visible-text warnings.
 - Formula Markdown now isolates display math delimiters on their own lines and spaces inline formulas away from surrounding prose for Typora-style renderers.
 - Adjacent source citation markers and adjacent generated emphasis spans are separated so exports do not contain ambiguous `[4][5]` or `****` runs between independent inline tokens.
+- PINN-style raw Markdown math embedded in ordinary paragraph text is repaired into Typora-friendly block math, malformed formula/citation boundaries are split so citations stay outside formulas, and compressed pipe-table text is recovered into Markdown table rows when the column pattern is clear.
+- Citation overflow controls such as `more_horiz` are clicked with bounded retries after lazy history completion and before extraction; saved static pages that cannot expand still omit the non-numeric marker from Markdown.
+- Structured table cells now use the Markdown/citation inline renderer instead of raw visible text, so real tables stay tables while citations inside cells render as `[n]`.
+- Clearly compressed pseudocode step lines are split back into per-step Markdown lines, and visual `\leftarrow` formulas no longer get mis-normalized as `\le ftarrow`.
 
 ## In Scope
 
@@ -29,6 +33,10 @@ NotebookLM Export 1.2 fixes user-reported export and popup issues:
 - Show `DOM: complete, loaded: N` in the popup when scan returns a loaded DOM message count.
 - Keep adjacent citation references visually separate in Markdown output.
 - Keep generated emphasis delimiters parseable when adjacent bold/italic spans touch.
+- Attempt bounded expansion of NotebookLM citation overflow controls such as `more_horiz`; omit non-numeric markers if the page cannot expand them.
+- Repair compressed Markdown pipe tables only when a clear header/separator/body column pattern is present.
+- Repair clearly compressed pseudocode step lines while leaving existing code fences and normal paragraphs unchanged.
+- Normalize raw Markdown math text outside code fences, including `\mathbbm` to `\mathbb` and common Unicode math symbols to KaTeX-compatible commands.
 
 ## Out of Scope
 
@@ -45,7 +53,8 @@ NotebookLM Export 1.2 fixes user-reported export and popup issues:
 - Summary extraction, user prompt heading handling, Markdown section rendering, and history counting: `src/extension/core.js`.
 - Formula source extraction and supported KaTeX visual-DOM inference: `src/extension/core.js`.
 - Typora-safe formula block boundaries, inline formula spacing, and unsupported visual inference fallback: `src/extension/core.js`.
-- Adjacent citation and emphasis delimiter spacing: `src/extension/core.js`.
+- Adjacent citation and emphasis delimiter spacing, table-cell citation rendering, and bounded citation overflow expansion: `src/extension/core.js`.
+- PINN/MC3WD artifact repair for raw display math, malformed formula citations, compressed pipe tables, compressed pseudocode lines, and `more_horiz` citation markers: `src/extension/core.js`.
 - Regression tests: `tests/dom-adapter.test.js`, `tests/renderer.test.js`, `tests/lazy-loader.test.js`.
 - Formula regression tests: `tests/formula.test.js`.
 - Version metadata: `manifest.json` and `package.json` are `1.2.0`.
@@ -92,9 +101,24 @@ NotebookLM Export 1.2 fixes user-reported export and popup issues:
   - KaTeX validation parsed `451/451` exported formulas with `errorCount=0`
   - local preview `html_tset/mc3wd-after-preview.html` had `displayMathCount=20`, `inlineMathCount=431`, and `errorsCount=0`
   - sample formulas included `$GB_i$`, `$$ p_k(GB_i)=\frac{...}{...} $$`, and `$$ H(GB_i)=-\sum_{k=1}^C... $$`
+- PINN saved HTML smoke:
+  - `messageCount=18`
+  - `sourceCount=68`
+  - `moreHorizCount=0`
+  - compressed table line count `0`
+  - `warningCount=0`
+  - suspicious formula pattern count `0`
+  - KaTeX validation parsed `274/274` exported formulas with `errorCount=0`
+  - compressed pipe text under `统一优化表` exports as a standard Markdown table
+  - malformed raw display math such as `IoU^{focaler}` is split into a standalone `$$` block, with citations rendered after the formula
+- Three saved-page Playwright smoke after the latest artifact fixes:
+  - MC3WD: `messages=28`, `sources=28`, `warningCount=0`, `exportMoreHorizCount=0`, `leFtarrowCount=0`, `longPseudocodeLineCount=0`, `collapsedAlgorithmHeaderCount=0`
+  - UAV: `messages=6`, `sources=4`, `warningCount=0`, real DOM table exports as 8 Markdown table rows, first row renders citation cells such as `AirCopBench[1] [2]`, and `exportMoreHorizCount=0`
+  - PINN: `messages=18`, `sources=68`, `warningCount=0`, `exportMoreHorizCount=0`, `compressedTableResidualCount=0`, `longPseudocodeLineCount=0`
 
 ## Known Boundaries
 
 - Live authenticated NotebookLM popup/export still requires the user's logged-in browser session.
 - The UAV smoke uses the saved HTML under ignored `html_tset/`.
+- Saved static NotebookLM pages do not execute enough live app behavior to expand `more_horiz`; the exporter clicks the controls but can only verify expansion behavior in a live authenticated NotebookLM session.
 - KaTeX visual-DOM inference is conservative and does not claim full original-source recovery for every possible KaTeX construct.

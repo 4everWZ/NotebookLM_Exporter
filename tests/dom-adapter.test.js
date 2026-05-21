@@ -269,6 +269,36 @@ test("separates adjacent source citation markers", () => {
   ]);
 });
 
+test("ignores NotebookLM citation overflow icons", () => {
+  const fixture = doc({
+    title: "Citation Overflow Test - NotebookLM",
+    children: [
+      el("div", { class: "chat-panel-content" }, [
+        el("div", { class: "chat-message-pair" }, [
+          el("mat-card", { class: "to-user-message-card-content" }, [
+            el("mat-card-content", { class: "message-content to-user-message-inner-content" }, [
+              el("p", {}, [
+                "DEIM",
+                el("span", { class: "citation-marker" }, ["25"]),
+                el("span", { class: "citation-marker" }, ["more_horiz"]),
+                " keeps the model compact.",
+              ]),
+            ]),
+          ]),
+        ]),
+      ]),
+    ],
+  });
+
+  const data = extractNotebookData(fixture, {
+    exportedAt: "2026-05-21T10:00:00.000Z",
+    historyLoadStatus: "complete",
+  });
+
+  assert.equal(data.messages[0].markdown, "DEIM[25] keeps the model compact.");
+  assert.deepEqual(data.messages[0].citations, [{ label: "25", sourceId: "s25" }]);
+});
+
 test("separates adjacent emphasis spans without changing italic bold semantics", () => {
   const fixture = doc({
     title: "Adjacent Emphasis Test - NotebookLM",
@@ -316,6 +346,171 @@ test("separates adjacent emphasis spans without changing italic bold semantics",
       "*斜体* **加粗** ***斜体加粗***",
       "",
       "- **列表加粗一** **列表加粗二**",
+    ].join("\n"),
+  );
+});
+
+test("repairs compressed Markdown table rows when NotebookLM exposes them as one paragraph", () => {
+  const fixture = doc({
+    title: "Compressed Table Test - NotebookLM",
+    children: [
+      el("div", { class: "chat-panel-content" }, [
+        el("div", { class: "chat-message-pair" }, [
+          el("mat-card", { class: "to-user-message-card-content" }, [
+            el("mat-card-content", { class: "message-content to-user-message-inner-content" }, [
+              el("p", {}, [
+                "| 模块 | 规范 | 来源 | 内存优化 |[29] | ------ | ------ | ------ | ------ |[29] | **Shape-IoU Loss** | 1 |[10] | 零参数 |[29] | **PINN Heat Loss** | 2 |[20] | 零推理成本 |[29]",
+              ]),
+            ]),
+          ]),
+        ]),
+      ]),
+    ],
+  });
+
+  const data = extractNotebookData(fixture, {
+    exportedAt: "2026-05-21T10:00:00.000Z",
+    historyLoadStatus: "complete",
+  });
+
+  assert.equal(
+    data.messages[0].markdown,
+    [
+      "| 模块 | 规范 | 来源 | 内存优化 [29] |",
+      "| --- | --- | --- | --- |",
+      "| **Shape-IoU Loss** | 1 | [10] | 零参数 [29] |",
+      "| **PINN Heat Loss** | 2 | [20] | 零推理成本 [29] |",
+    ].join("\n"),
+  );
+});
+
+test("preserves already structured Markdown table rows", () => {
+  const fixture = doc({
+    title: "Structured Markdown Table Test - NotebookLM",
+    children: [
+      el("div", { class: "chat-panel-content" }, [
+        el("div", { class: "chat-message-pair" }, [
+          el("mat-card", { class: "to-user-message-card-content" }, [
+            el("mat-card-content", { class: "message-content to-user-message-inner-content" }, [
+              el("p", {}, ["| Metric | Value |"]),
+              el("p", {}, ["| --- | --- |"]),
+              el("p", {}, ["| F1 | 0.91 |"]),
+            ]),
+          ]),
+        ]),
+      ]),
+    ],
+  });
+
+  const data = extractNotebookData(fixture, {
+    exportedAt: "2026-05-21T10:00:00.000Z",
+    historyLoadStatus: "complete",
+  });
+
+  assert.equal(data.messages[0].markdown, "| Metric | Value |\n\n| --- | --- |\n\n| F1 | 0.91 |");
+});
+
+test("renders citations inside structured table cells as Markdown citations", () => {
+  const fixture = doc({
+    title: "Table Citation Test - NotebookLM",
+    children: [
+      el("div", { class: "chat-panel-content" }, [
+        el("div", { class: "chat-message-pair" }, [
+          el("mat-card", { class: "to-user-message-card-content" }, [
+            el("mat-card-content", { class: "message-content to-user-message-inner-content" }, [
+              el("table", {}, [
+                el("tr", {}, [
+                  el("th", {}, ["Benchmark"]),
+                  el("th", {}, [
+                    "AirCopBench",
+                    el("button", { class: "citation-marker" }, ["1"]),
+                    "-",
+                    el("button", { class: "citation-marker" }, ["2"]),
+                  ]),
+                ]),
+                el("tr", {}, [
+                  el("td", {}, ["Task count"]),
+                  el("td", {}, ["14.6k", el("button", { class: "citation-marker" }, ["9"])]),
+                ]),
+              ]),
+            ]),
+          ]),
+        ]),
+      ]),
+    ],
+  });
+
+  const data = extractNotebookData(fixture, {
+    exportedAt: "2026-05-21T10:00:00.000Z",
+    historyLoadStatus: "complete",
+  });
+
+  assert.equal(
+    data.messages[0].markdown,
+    [
+      "| Benchmark | AirCopBench[1] [2] |",
+      "| --- | --- |",
+      "| Task count | 14.6k[9] |",
+    ].join("\n"),
+  );
+  assert.deepEqual(data.messages[0].citations, [
+    { label: "1", sourceId: "s1" },
+    { label: "2", sourceId: "s2" },
+    { label: "9", sourceId: "s9" },
+  ]);
+});
+
+test("repairs compressed pseudocode step lines without changing inline emphasis", () => {
+  const fixture = doc({
+    title: "Compressed Pseudocode Test - NotebookLM",
+    children: [
+      el("div", { class: "chat-panel-content" }, [
+        el("div", { class: "chat-message-pair" }, [
+          el("mat-card", { class: "to-user-message-card-content" }, [
+            el("mat-card-content", { class: "message-content to-user-message-inner-content" }, [
+              el("p", {}, [
+                el("strong", {}, ["Algorithm 1"]),
+                " MC3WD-SEGBC ",
+                el("strong", {}, ["Input:"]),
+                " dataset D. ",
+                el("strong", {}, ["Output:"]),
+                " result R.",
+              ]),
+              el("p", {}, [
+                "1: Train model 2: Extract features 3: Initialize queue 4: ",
+                el("strong", {}, ["while"]),
+                " queue is not empty ",
+                el("strong", {}, ["do"]),
+                " 5: ",
+                el("strong", {}, ["return"]),
+                " result",
+              ]),
+            ]),
+          ]),
+        ]),
+      ]),
+    ],
+  });
+
+  const data = extractNotebookData(fixture, {
+    exportedAt: "2026-05-21T10:00:00.000Z",
+    historyLoadStatus: "complete",
+  });
+
+  assert.equal(
+    data.messages[0].markdown,
+    [
+      "**Algorithm 1** MC3WD-SEGBC",
+      "",
+      "**Input:** dataset D.",
+      "",
+      "**Output:** result R.",
+      "",
+      "1: Train model",
+      "2: Extract features",
+      "3: Initialize queue",
+      "4: **while** queue is not empty **do**",
+      "5: **return** result",
     ].join("\n"),
   );
 });
@@ -458,6 +653,84 @@ test("separates display formulas from surrounding paragraph text for Markdown ma
   assert.equal(
     data.messages[0].markdown,
     ["概率定义：", "", "$$", "p_i=\\frac{1}{C}", "$$", "", "其中， $C$ 是类别数。"].join("\n"),
+  );
+});
+
+test("repairs raw display math delimiters embedded in NotebookLM paragraph text", () => {
+  const fixture = doc({
+    title: "Raw Display Formula Boundary Test - NotebookLM",
+    children: [
+      el("div", { class: "chat-panel-content" }, [
+        el("div", { class: "chat-message-pair" }, [
+          el("mat-card", { class: "to-user-message-card-content" }, [
+            el("mat-card-content", { class: "message-content to-user-message-inner-content" }, [
+              el("p", {}, [
+                "阈值定义： $$M_b^{(i,j)} = \\mathbbm{1}\\left(d_{i,j}^{pred} > T_b\\right)$$",
+                el("span", { class: "citation-marker" }, ["8"]),
+                " 后续过滤无效窗口。",
+              ]),
+            ]),
+          ]),
+        ]),
+      ]),
+    ],
+  });
+
+  const data = extractNotebookData(fixture, {
+    exportedAt: "2026-05-21T10:00:00.000Z",
+    historyLoadStatus: "complete",
+  });
+
+  assert.equal(
+    data.messages[0].markdown,
+    [
+      "阈值定义：",
+      "",
+      "$$",
+      "M_b^{(i,j)} = \\mathbb{1}\\left(d_{i,j}^{pred} > T_b\\right)",
+      "$$",
+      "",
+      "[8] 后续过滤无效窗口。",
+    ].join("\n"),
+  );
+});
+
+test("moves NotebookLM citations out of malformed raw display formula text", () => {
+  const fixture = doc({
+    title: "Malformed Formula Citation Test - NotebookLM",
+    children: [
+      el("div", { class: "chat-panel-content" }, [
+        el("div", { class: "chat-message-pair" }, [
+          el("mat-card", { class: "to-user-message-card-content" }, [
+            el("mat-card-content", { class: "message-content to-user-message-inner-content" }, [
+              el("p", {}, [
+                "公式： $$IoU^{focaler} = \\begin{cases} 0, & IoU < d \\\\ 1, & IoU > u \\end{cases} \\quad \\text{$$",
+                el("span", { class: "citation-marker" }, ["17"]),
+                "}$$ 继续解释。",
+              ]),
+            ]),
+          ]),
+        ]),
+      ]),
+    ],
+  });
+
+  const data = extractNotebookData(fixture, {
+    exportedAt: "2026-05-21T10:00:00.000Z",
+    historyLoadStatus: "complete",
+  });
+
+  assert.equal(
+    data.messages[0].markdown,
+    [
+      "公式：",
+      "",
+      "$$",
+      "IoU^{focaler} = \\begin{cases} 0, & IoU < d \\\\ 1, & IoU > u \\end{cases}",
+      "$$",
+      "",
+      "[17] 继续解释。",
+    ].join("\n"),
   );
 });
 

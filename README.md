@@ -14,6 +14,7 @@ Browser extension for exporting NotebookLM conversations to structured Markdown.
 - Keeps user prompt text as message body text even when NotebookLM marks the prompt wrapper with heading roles or heading classes.
 - Uses Gemini/Voyager-style formula source fields, LaTeX annotations, and conservative NotebookLM KaTeX visual-DOM inference before falling back to visible text warnings.
 - Emits Typora-friendly Markdown math: display formulas are isolated on their own `$$` lines, and inline formulas are spaced away from surrounding prose.
+- Repairs common saved-page artifacts: citation overflow controls such as `more_horiz` are clicked with bounded retries before extraction and omitted only if the page cannot expand them, raw `$$...$$` math embedded in paragraph text is split into Markdown block math, clearly compressed pipe-table text is recovered into Markdown table rows, and clearly compressed pseudocode step lines are split back into readable lines.
 
 PDF export and full Gemini/Voyager formula-copy UI/MathML format compatibility are future work.
 
@@ -37,6 +38,7 @@ Scan and export both run the same lazy-load gate before extracting Markdown:
 - The content script scrolls the chat panel to the top repeatedly.
 - It waits for the loaded message count and top scroll position to stay stable across multiple checks.
 - It refuses `complete` while NotebookLM loading indicators are visible.
+- After history is complete, it attempts bounded expansion of NotebookLM citation overflow controls before extracting Markdown.
 - It counts `.individual-message` nodes when NotebookLM exposes them, falling back to `.chat-message-pair` / `chat-message` for older DOM shapes, and the popup shows that loaded DOM count.
 - Export throws instead of downloading if the scan status is not `complete`.
 

@@ -239,6 +239,7 @@
     ["α", "\\alpha"],
     ["β", "\\beta"],
     ["γ", "\\gamma"],
+    ["κ", "\\kappa"],
     ["δ", "\\delta"],
     ["ϵ", "\\epsilon"],
     ["ε", "\\epsilon"],
@@ -259,6 +260,8 @@
     ["Σ", "\\Sigma"],
     ["Φ", "\\Phi"],
     ["Ω", "\\Omega"],
+    ["∂", "\\partial"],
+    ["∇", "\\nabla"],
     ["∑", "\\sum"],
     ["∏", "\\prod"],
     ["∈", "\\in"],
@@ -280,6 +283,9 @@
     ["×", "\\times"],
     ["÷", "\\div"],
     ["±", "\\pm"],
+    ["⋅", "\\cdot"],
+    ["∗", "\\ast"],
+    ["⊗", "\\otimes"],
     ["%", "\\%"],
     ["−", "-"],
     ["→", "\\to"],
@@ -292,6 +298,7 @@
     ["∣", "|"],
     ["‖", "\\|"],
     ["√", "\\sqrt"],
+    ["′", "'"],
   ]);
 
   const NAMED_OPERATORS = new Set(["arccos", "arcsin", "arctan", "cos", "det", "dim", "exp", "ln", "log", "max", "min", "sin", "tan"]);
@@ -306,6 +313,7 @@
     "alpha",
     "beta",
     "gamma",
+    "kappa",
     "delta",
     "epsilon",
     "emptyset",
@@ -328,6 +336,8 @@
     "Sigma",
     "Phi",
     "Omega",
+    "partial",
+    "nabla",
     "sum",
     "prod",
     "in",
@@ -344,14 +354,59 @@
     "times",
     "div",
     "pm",
+    "cdot",
+    "ast",
+    "otimes",
     "to",
     ...NAMED_OPERATORS,
   ];
+  function escapeRegExp(value) {
+    return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  }
+
+  function latexCommandPrefixGuard(command) {
+    const suffixes = LATEX_COMMANDS_REQUIRING_BOUNDARY
+      .filter((candidate) => candidate !== command && candidate.startsWith(command))
+      .map((candidate) => escapeRegExp(candidate.slice(command.length)))
+      .filter(Boolean);
+
+    return suffixes.length > 0 ? `(?!${suffixes.join("|")})` : "";
+  }
+
   const LATEX_COMMAND_BOUNDARY_PATTERNS = LATEX_COMMANDS_REQUIRING_BOUNDARY.map((command) => ({
-    followedByIdentifier: new RegExp(`\\\\${command}(?=[A-Za-z0-9])`, "g"),
+    followedByIdentifier: new RegExp(`\\\\${command}${latexCommandPrefixGuard(command)}(?=[A-Za-z0-9])`, "g"),
     followedByCommand: new RegExp(`\\\\${command}(?=\\\\[A-Za-z])`, "g"),
     replacement: `\\${command} `,
   }));
+
+  function normalizeFormulaLatex(latex) {
+    let normalized = String(latex || "")
+      .replace(/[\u200B-\u200D\uFEFF]/g, "")
+      .replace(/\\mathbbm\b/g, "\\mathbb")
+      .replace(/\uE020\s*=/g, "\\ne");
+    const protectedCommands = [];
+    normalized = normalized.replace(/\\[A-Za-z]+/g, (command) => {
+      const index = protectedCommands.push(command) - 1;
+      return `\uE100${index}\uE101`;
+    });
+
+    normalized = Array.from(normalized)
+      .map((character, index, characters) => {
+        if (character === "%" && characters[index - 1] === "\\") {
+          return character;
+        }
+        return TEXT_SYMBOL_LATEX.get(character) || character;
+      })
+      .join("");
+
+    for (const pattern of LATEX_COMMAND_BOUNDARY_PATTERNS) {
+      normalized = normalized
+        .replace(pattern.followedByIdentifier, pattern.replacement)
+        .replace(pattern.followedByCommand, pattern.replacement);
+    }
+
+    return normalized.replace(/\uE100(\d+)\uE101/g, (_match, index) => protectedCommands[Number(index)] || "").trim();
+  }
 
   function normalizeKatexText(text, element) {
     const raw = String(text || "")
@@ -459,6 +514,83 @@
       });
   }
 
+  function parseKatexAccent(element) {
+    const accentBody = queryFirst(element, [".accent-body"]);
+    const accentText = visibleText(accentBody);
+    const accentCommand = {
+      "^": "hat",
+      "¯": "bar",
+      "ˉ": "bar",
+      "~": "tilde",
+    }[accentText];
+
+    if (!accentCommand) {
+      return parseKatexNodes(childNodes(element));
+    }
+
+    const baseRow = primaryVlistRows(element).find((row) => !queryFirst(row, [".accent-body"]) && parseKatexRow(row));
+    const base = parseKatexRow(baseRow);
+    return base ? `\\${accentCommand}{${base}}` : "";
+  }
+
+  function parseKatexMtableRows(element) {
+    const columns = directChildren(element).filter((child) => /\bcol-align-[lcr]\b/.test(getTrimmedAttribute(child, "class")));
+    if (columns.length === 0) {
+      return [];
+    }
+
+    const columnRows = columns.map((column) =>
+      primaryVlistRows(column)
+        .map((row, index) => ({
+          index,
+          top: parseTopValue(row),
+          latex: parseKatexRow(row),
+        }))
+        .filter((row) => row.latex)
+        .sort((left, right) => {
+          const leftTop = Number.isFinite(left.top) ? left.top : left.index;
+          const rightTop = Number.isFinite(right.top) ? right.top : right.index;
+          return leftTop - rightTop;
+        }),
+    );
+    const rowCount = Math.max(...columnRows.map((rows) => rows.length));
+
+    return Array.from({ length: rowCount }, (_, rowIndex) =>
+      columnRows.map((rows) => (rows[rowIndex] && rows[rowIndex].latex) || ""),
+    );
+  }
+
+  function parseKatexMtable(element, cases = false) {
+    const rows = parseKatexMtableRows(element);
+    if (rows.length === 0) {
+      return parseKatexNodes(childNodes(element));
+    }
+
+    if (cases) {
+      const body = rows
+        .map((cells) => {
+          const [value, ...conditions] = cells.filter(Boolean);
+          return conditions.length > 0 ? `${value}, & ${conditions.join(" & ")}` : value;
+        })
+        .join("\\\\");
+      return `\\begin{cases}${body}\\end{cases}`;
+    }
+
+    const alignment = "l".repeat(Math.max(...rows.map((row) => row.length)));
+    const body = rows.map((cells) => cells.join(" & ")).join("\\\\");
+    return `\\begin{array}{${alignment}}${body}\\end{array}`;
+  }
+
+  function parseKatexCases(element) {
+    const open = directChildren(element).find((child) => hasClass(child, "mopen"));
+    const table = queryFirst(element, [".mtable"]);
+    if (!table || !String((open && open.textContent) || "").includes("{")) {
+      return "";
+    }
+
+    return parseKatexMtable(table, true);
+  }
+
   function parseKatexFraction(element) {
     const rows = sortedVisualRows(element);
     if (rows.length < 2) {
@@ -538,6 +670,21 @@
       return "";
     }
 
+    if (hasClass(element, "minner")) {
+      const cases = parseKatexCases(element);
+      if (cases) {
+        return cases;
+      }
+    }
+
+    if (hasClass(element, "mtable")) {
+      return parseKatexMtable(element);
+    }
+
+    if (hasClass(element, "accent")) {
+      return parseKatexAccent(element);
+    }
+
     if (hasClass(element, "mfrac")) {
       return parseKatexFraction(element);
     }
@@ -587,18 +734,22 @@
   }
 
   function hasUnsupportedInferredLatex(latex) {
-    return /[\uE000-\uF8FF#&]/.test(String(latex || ""));
+    const value = String(latex || "");
+    if (/[\uE000-\uF8FF#]/.test(value)) {
+      return true;
+    }
+    return value.includes("&") && !/\\begin\{(?:array|cases)\}/.test(value);
   }
 
   function getFormulaLatexSource(element) {
     const attributeSource = stripFormulaDelimiters(getFormulaAttributeSource(element));
     if (attributeSource) {
-      return { latex: attributeSource, source: "attribute" };
+      return { latex: normalizeFormulaLatex(attributeSource), source: "attribute" };
     }
 
     const annotationSource = stripFormulaDelimiters(getFormulaAnnotation(element));
     if (annotationSource) {
-      return { latex: annotationSource, source: "annotation" };
+      return { latex: normalizeFormulaLatex(annotationSource), source: "annotation" };
     }
 
     const inferredSource = stripFormulaDelimiters(inferKatexVisualLatex(element));
@@ -610,7 +761,7 @@
       return { latex: "", source: "visual", rejected: true };
     }
 
-    return { latex: inferredSource, source: "visual" };
+    return { latex: normalizeFormulaLatex(inferredSource), source: "visual" };
   }
 
   function formatFormulaMarkdown(latex, display) {
@@ -695,7 +846,190 @@
       .replace(/[ \t\f\v]+/g, " ")
       .replace(/ *\n */g, "\n")
       .replace(/(\[\d+\])(?=\[\d+\])/g, "$1 ")
+      .replace(/(\[\d+\])\s*-\s*(?=\[\d+\])/g, "$1 ")
       .trim();
+  }
+
+  function isCitationOnlyCell(value) {
+    return /^(?:\[\d+\]\s*)+$/.test(String(value || "").trim());
+  }
+
+  function isSeparatorCell(value) {
+    return /^:?-{3,}:?$/.test(String(value || "").trim());
+  }
+
+  function repairCompressedMarkdownTableLine(line) {
+    const text = String(line || "").trim();
+    if (!text.startsWith("|") || !/\|\s*:?-{3,}:?\s*\|/.test(text)) {
+      return line;
+    }
+
+    const cells = text.split("|").slice(1).map((cell) => cell.trim());
+    while (cells.length > 0 && cells[cells.length - 1] === "") {
+      cells.pop();
+    }
+
+    const separatorStart = cells.findIndex((cell, index) => {
+      if (!isSeparatorCell(cell)) {
+        return false;
+      }
+      let end = index;
+      while (end < cells.length && isSeparatorCell(cells[end])) {
+        end += 1;
+      }
+      return end - index >= 2;
+    });
+
+    if (separatorStart <= 0) {
+      return line;
+    }
+
+    let columnCount = 0;
+    while (separatorStart + columnCount < cells.length && isSeparatorCell(cells[separatorStart + columnCount])) {
+      columnCount += 1;
+    }
+
+    if (columnCount < 2 || separatorStart !== columnCount) {
+      const headerRemainder = cells.slice(0, separatorStart);
+      if (headerRemainder.length !== columnCount + 1 || !isCitationOnlyCell(headerRemainder[headerRemainder.length - 1])) {
+        return line;
+      }
+    }
+
+    function normalizeRow(rowCells, trailingCitation = "") {
+      if (rowCells.length !== columnCount) {
+        return null;
+      }
+      const normalized = rowCells.slice();
+      if (trailingCitation) {
+        normalized[normalized.length - 1] = `${normalized[normalized.length - 1]} ${trailingCitation}`.trim();
+      }
+      return normalized;
+    }
+
+    const headerTokens = cells.slice(0, separatorStart);
+    const headerCitation = headerTokens.length === columnCount + 1 && isCitationOnlyCell(headerTokens[headerTokens.length - 1])
+      ? headerTokens.pop()
+      : "";
+    const header = normalizeRow(headerTokens, headerCitation);
+    if (!header) {
+      return line;
+    }
+
+    const body = cells.slice(separatorStart + columnCount);
+    while (body.length > 0 && isCitationOnlyCell(body[0])) {
+      body.shift();
+    }
+    const bodyRows = [];
+    while (body.length > 0) {
+      const rowCells = body.splice(0, columnCount);
+      const trailingCitation = body.length > 0 && isCitationOnlyCell(body[0]) ? body.shift() : "";
+      const row = normalizeRow(rowCells, trailingCitation);
+      if (!row) {
+        return line;
+      }
+      bodyRows.push(row);
+    }
+
+    const rows = [header, Array.from({ length: columnCount }, () => "---"), ...bodyRows];
+    return rows.map((row) => `| ${row.join(" | ")} |`).join("\n");
+  }
+
+  function countPseudocodeStepMarkers(line) {
+    return (String(line || "").match(/(?:^|\s)\d{1,3}:\s+/g) || []).length;
+  }
+
+  function repairCompressedPseudocodeLine(line) {
+    let repaired = String(line || "");
+    const hasAlgorithmHeader = /\bAlgorithm\s+\d+\b/i.test(repaired);
+    const hasInputOutput = /(?:^|\s)\*{0,2}Input:\*{0,2}\s/i.test(repaired) && /(?:^|\s)\*{0,2}Output:\*{0,2}\s/i.test(repaired);
+
+    if (hasAlgorithmHeader && hasInputOutput) {
+      repaired = repaired.replace(/\s+(?=\*{0,3}(?:Input|Output):\*{0,3}\s)/gi, "\n\n");
+    }
+
+    if (countPseudocodeStepMarkers(repaired) >= 3) {
+      repaired = repaired.replace(/\s+(?=\d{1,3}:\s+)/g, "\n");
+    }
+
+    return repaired;
+  }
+
+  function moveMalformedFormulaCitations(markdown) {
+    return String(markdown || "").replace(
+      /\s*(?:\\quad\s*)?\\text\{\$\$((?:\s*\[\d+\])+)\s*(?:\$\$)?\}\s*\$\$/g,
+      (_match, citations) => `$$ ${String(citations || "").trim()}`,
+    );
+  }
+
+  function repairRawInlineMath(markdown) {
+    return String(markdown || "").replace(/(?<!\\)\$([^$\n]+?)(?<!\\)\$/g, (_match, latex) => {
+      const normalized = normalizeFormulaLatex(latex);
+      return normalized ? `$${normalized}$` : "";
+    });
+  }
+
+  function repairRawDisplayMathLine(line) {
+    const text = moveMalformedFormulaCitations(line);
+    if (!text.includes("$$")) {
+      return repairRawInlineMath(text);
+    }
+
+    const parts = [];
+    let cursor = 0;
+    const displayMath = /\$\$([^$\n]*(?:\$(?!\$)[^$\n]*)*)\$\$/g;
+    let match;
+
+    function pushText(value) {
+      const normalized = repairRawInlineMath(String(value || "").trim());
+      if (normalized) {
+        parts.push(normalized);
+      }
+    }
+
+    while ((match = displayMath.exec(text)) !== null) {
+      pushText(text.slice(cursor, match.index));
+      const latex = normalizeFormulaLatex(match[1]);
+      if (latex) {
+        parts.push(["$$", latex, "$$"].join("\n"));
+      }
+      cursor = match.index + match[0].length;
+    }
+
+    if (cursor === 0) {
+      return repairRawInlineMath(text);
+    }
+
+    pushText(text.slice(cursor));
+    return parts.join("\n\n");
+  }
+
+  function repairMarkdownArtifacts(markdown) {
+    const repaired = [];
+    let inCodeFence = false;
+
+    for (const line of String(markdown || "").split("\n")) {
+      if (/^\s*```/.test(line)) {
+        inCodeFence = !inCodeFence;
+        repaired.push(line);
+        continue;
+      }
+
+      if (inCodeFence) {
+        repaired.push(line);
+        continue;
+      }
+
+      const mathRepaired = repairRawDisplayMathLine(line);
+      for (const repairedLine of mathRepaired.split("\n")) {
+        const tableRepaired = repairCompressedMarkdownTableLine(repairedLine);
+        for (const finalLine of tableRepaired.split("\n")) {
+          repaired.push(repairCompressedPseudocodeLine(finalLine));
+        }
+      }
+    }
+
+    return repaired.join("\n");
   }
 
   function needsInlineMarkdownSeparator(left, right) {
@@ -836,11 +1170,17 @@
       }));
   }
 
-  function renderTable(element) {
+  function normalizeTableCellMarkdown(cell, context) {
+    return normalizeInline(elementToMarkdown(cell, context))
+      .replace(/\n+/g, "<br>")
+      .replace(/\|/g, "\\|");
+  }
+
+  function renderTable(element, context) {
     const rows = queryAll(element, "tr").map((row) =>
       Array.from(row.children || [])
         .filter((cell) => ["td", "th"].includes(getTagName(cell)))
-        .map((cell) => visibleText(cell)),
+        .map((cell) => normalizeTableCellMarkdown(cell, context)),
     );
 
     if (rows.length === 0 || rows[0].length === 0) {
@@ -901,7 +1241,9 @@
   }
 
   function recordCitation(element, context) {
-    const label = visibleText(element);
+    const rawLabel = visibleText(element);
+    const labelMatch = rawLabel.match(/\d+/);
+    const label = labelMatch ? labelMatch[0] : "";
     if (label) {
       const citation = { label, sourceId: `s${label}` };
       if (!context.citations.some((item) => item.label === citation.label && item.sourceId === citation.sourceId)) {
@@ -971,7 +1313,7 @@
     }
 
     if (tagName === "table") {
-      return renderTable(node);
+      return renderTable(node, context);
     }
 
     return renderInlineChildren(node, context);
@@ -1049,7 +1391,7 @@
   function extractMessageMarkdown(container, warnings, options = {}) {
     const body = queryFirst(container, [".message-text-content", ".message-content"]) || container;
     const context = { citations: [], warnings, disableNotebookHeadings: Boolean(options.disableNotebookHeadings) };
-    const markdown = elementToMarkdown(body, context);
+    const markdown = repairMarkdownArtifacts(elementToMarkdown(body, context));
 
     return {
       markdown,
@@ -1065,7 +1407,7 @@
     }
 
     const context = { citations: [], warnings };
-    const markdown = elementToMarkdown(summaryContainer, context).trim();
+    const markdown = repairMarkdownArtifacts(elementToMarkdown(summaryContainer, context)).trim();
     return markdown ? { markdown } : null;
   }
 
@@ -1250,6 +1592,102 @@
     return candidates.some((candidate) => visibleText(candidate) || getTagName(candidate) !== "");
   }
 
+  function isCitationOverflowControl(element) {
+    if (!matchesAny(element, [".citation-marker"])) {
+      return false;
+    }
+
+    const text = visibleText(element).toLowerCase();
+    if (/\d/.test(text)) {
+      return false;
+    }
+
+    const labels = walkElementLike(element)
+      .map((candidate) => getTrimmedAttribute(candidate, "aria-label"))
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+    const combined = `${text} ${labels}`.trim();
+
+    return (
+      /\bmore_horiz\b/.test(combined) ||
+      combined.includes("显示其他引用") ||
+      combined.includes("show more citations") ||
+      combined.includes("more citations")
+    );
+  }
+
+  function getCitationOverflowClickTarget(element) {
+    if (!element) {
+      return null;
+    }
+
+    if (typeof element.click === "function") {
+      return element;
+    }
+
+    if (typeof element.closest === "function") {
+      const closestButton = element.closest("button");
+      if (closestButton && typeof closestButton.click === "function") {
+        return closestButton;
+      }
+    }
+
+    let current = element.parentNode;
+    while (current) {
+      if (getTagName(current) === "button" && typeof current.click === "function") {
+        return current;
+      }
+      current = current.parentNode;
+    }
+
+    return null;
+  }
+
+  function findCitationOverflowControls(documentRef) {
+    return queryAll(documentRef, ".citation-marker").filter(isCitationOverflowControl);
+  }
+
+  async function expandCitationOverflowControls(documentRef, options = {}) {
+    const wait = options.wait || (() => defaultWait(options.waitMs || 150));
+    const maxAttempts = Number(options.maxAttempts || 4);
+    const maxClicks = Number(options.maxClicks || 80);
+    const clickedTargets = new WeakSet();
+    let attempts = 0;
+    let clicks = 0;
+
+    while (attempts < maxAttempts && clicks < maxClicks) {
+      const controls = findCitationOverflowControls(documentRef);
+      const targets = controls
+        .map((control) => getCitationOverflowClickTarget(control))
+        .filter((target) => target && !clickedTargets.has(target))
+        .slice(0, maxClicks - clicks);
+
+      if (targets.length === 0) {
+        break;
+      }
+
+      attempts += 1;
+      for (const target of targets) {
+        clickedTargets.add(target);
+        try {
+          target.click();
+          clicks += 1;
+        } catch (_error) {
+          // NotebookLM may re-render an overflow control between discovery and click.
+        }
+      }
+
+      await wait();
+    }
+
+    return {
+      attempts,
+      clicks,
+      remainingCount: findCitationOverflowControls(documentRef).length,
+    };
+  }
+
   async function loadFullHistory(documentRef, options = {}) {
     const container = findChatScrollContainer(documentRef);
 
@@ -1290,10 +1728,18 @@
       previousCount = currentCount;
 
       if (stableCount >= stableChecks) {
+        const citationOverflow = await expandCitationOverflowControls(documentRef, {
+          wait: options.citationOverflowWait || options.wait,
+          waitMs: options.citationOverflowWaitMs || 150,
+          maxAttempts: options.citationOverflowMaxAttempts || 4,
+          maxClicks: options.citationOverflowMaxClicks || 80,
+        });
+
         return {
           status: "complete",
           attempts,
           messageCount: currentCount,
+          citationOverflow,
         };
       }
     }
@@ -1308,6 +1754,7 @@
   return {
     createConversationStatus,
     createMessagePreview,
+    expandCitationOverflowControls,
     extractNotebookData,
     extractFormulaMarkdown,
     filterExportData,
